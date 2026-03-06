@@ -6,7 +6,10 @@ const { auth, admin } = require('../middleware/auth');
 // Get all users (allow authenticated users to see list for setting admin)
 router.get('/', auth, async (req, res) => {
   try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
+    });
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -16,7 +19,9 @@ router.get('/', auth, async (req, res) => {
 // Get single user
 router.get('/:id', auth, admin, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -35,17 +40,19 @@ router.put('/:id/role', auth, async (req, res) => {
     }
 
     // Allow setting admin role directly without requiring admin permission
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { role },
-      { new: true, runValidators: true }
-    ).select('-password');
-
+    const user = await User.findByPk(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json(user);
+    await user.update({ role });
+
+    // Return user without password
+    const updatedUser = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
+
+    res.json(updatedUser);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -55,14 +62,16 @@ router.put('/:id/role', auth, async (req, res) => {
 router.delete('/:id', auth, admin, async (req, res) => {
   try {
     // Prevent deleting yourself
-    if (req.params.id === req.user._id.toString()) {
+    if (req.params.id === req.user.id.toString()) {
       return res.status(400).json({ message: 'Không thể xóa chính mình' });
     }
 
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findByPk(req.params.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+
+    await user.destroy();
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -111,6 +111,16 @@ const Login = () => {
                 </div>
               </div>
 
+              {/* Forgot Password Link */}
+              <div className="text-right">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-medium text-blue-600 hover:text-purple-600 transition-colors duration-200"
+                >
+                  Quên mật khẩu?
+                </Link>
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"

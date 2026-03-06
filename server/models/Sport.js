@@ -1,34 +1,55 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const sportSchema = new mongoose.Schema({
+const Sport = sequelize.define('Sport', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   name: {
-    type: String,
-    required: true,
-    unique: true
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    unique: {
+      msg: 'Sport name already exists'
+    },
+    validate: {
+      notEmpty: {
+        msg: 'Sport name is required'
+      }
+    }
   },
   nameVi: {
-    type: String,
-    required: true
-  },
-  description: String,
-  pricePerHour: {
-    type: Number,
-    required: true,
-    default: 0
-  },
-  image: String,
-  facilities: [{
-    name: String,
-    capacity: Number,
-    available: {
-      type: Boolean,
-      default: true
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    validate: {
+      notEmpty: {
+        msg: 'Vietnamese name is required'
+      }
     }
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
+  },
+  description: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  pricePerHour: {
+    type: DataTypes.DECIMAL(10, 2), // 10 digits, 2 decimal places
+    allowNull: false,
+    defaultValue: 0,
+    validate: {
+      min: {
+        args: [0],
+        msg: 'Price must be positive'
+      }
+    }
+  },
+  image: {
+    type: DataTypes.STRING(500),
+    allowNull: true
   }
+}, {
+  tableName: 'sports',
+  timestamps: true // createdAt, updatedAt
 });
 
-module.exports = mongoose.model('Sport', sportSchema);
+module.exports = Sport;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 
 const Sidebar = () => {
     const [sports, setSports] = useState([]);
@@ -13,7 +13,7 @@ const Sidebar = () => {
 
     const fetchSports = async () => {
         try {
-            const response = await axios.get('http://localhost:5000/api/sports');
+            const response = await api.get('/sports');
             setSports(response.data);
         } catch (error) {
             console.error('Error fetching sports:', error);
@@ -98,9 +98,9 @@ const Sidebar = () => {
                         ) : (
                             <ul className="space-y-1">
                                 {sports.map((sport) => (
-                                    <li key={sport._id}>
+                                    <li key={sport.id}>
                                         <button
-                                            onClick={() => handleSportClick(sport._id)}
+                                            onClick={() => handleSportClick(sport.id)}
                                             className="w-full text-left px-4 py-3 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all duration-200 flex items-center gap-3 group"
                                         >
                                             <span className="text-2xl group-hover:scale-110 transition-transform">

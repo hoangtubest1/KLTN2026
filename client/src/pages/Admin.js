@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../api';
 import { format } from 'date-fns';
 import './Admin.css';
 
@@ -27,7 +27,7 @@ const Admin = () => {
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/bookings');
+      const response = await api.get('/bookings');
       setBookings(response.data);
       setLoading(false);
     } catch (error) {
@@ -39,7 +39,7 @@ const Admin = () => {
   const fetchUsers = async () => {
     try {
       setUsersLoading(true);
-      const response = await axios.get('http://localhost:5000/api/users');
+      const response = await api.get('/users');
       setUsers(response.data);
       setUsersLoading(false);
     } catch (error) {
@@ -50,13 +50,13 @@ const Admin = () => {
 
   const updateUserRole = async (userId, newRole) => {
     try {
-      await axios.put(`http://localhost:5000/api/users/${userId}/role`, {
+      await api.put(`/users/${userId}/role`, {
         role: newRole
       });
       fetchUsers(); // Refresh users list
-      
+
       // If updating own role, refresh user context
-      if (userId === user?._id || userId === user?.id) {
+      if (userId === user?.id) {
         window.location.reload(); // Reload to update auth context
       } else {
         alert('Cập nhật quyền thành công!');
@@ -72,7 +72,7 @@ const Admin = () => {
       return;
     }
     try {
-      await axios.delete(`http://localhost:5000/api/users/${userId}`);
+      await api.delete(`/users/${userId}`);
       fetchUsers(); // Refresh users list
       alert('Xóa user thành công!');
     } catch (error) {
@@ -83,7 +83,7 @@ const Admin = () => {
 
   const updateBookingStatus = async (bookingId, newStatus) => {
     try {
-      await axios.put(`http://localhost:5000/api/bookings/${bookingId}/status`, {
+      await api.put(`/bookings/${bookingId}/status`, {
         status: newStatus
       });
       fetchBookings(); // Refresh list
@@ -98,7 +98,7 @@ const Admin = () => {
       return;
     }
     try {
-      await axios.delete(`http://localhost:5000/api/bookings/${bookingId}`);
+      await api.delete(`/bookings/${bookingId}`);
       fetchBookings(); // Refresh list
     } catch (error) {
       console.error('Error deleting booking:', error);
@@ -116,7 +116,7 @@ const Admin = () => {
 
   // Filter users
   const filteredUsers = users.filter(u => {
-    const matchesSearch = userSearchTerm === '' || 
+    const matchesSearch = userSearchTerm === '' ||
       u.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
       u.phone.includes(userSearchTerm);
@@ -126,14 +126,14 @@ const Admin = () => {
   // Filter bookings
   const filteredBookings = bookings.filter(booking => {
     const matchesStatus = filterStatus === 'all' || booking.status === filterStatus;
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       booking.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
       booking.customerPhone.includes(searchTerm) ||
-      booking.sportId?.nameVi?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDate = filterDate === '' || 
+      booking.sport?.nameVi?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDate = filterDate === '' ||
       format(new Date(booking.date), 'yyyy-MM-dd') === filterDate;
-    
+
     return matchesStatus && matchesSearch && matchesDate;
   });
 
@@ -213,187 +213,187 @@ const Admin = () => {
 
         {activeTab === 'bookings' && (
           <>
-        {/* Statistics Cards */}
-        <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon">📊</div>
-            <div className="stat-info">
-              <h3>{stats.total}</h3>
-              <p>Tổng Lịch Đặt</p>
+            {/* Statistics Cards */}
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-icon">📊</div>
+                <div className="stat-info">
+                  <h3>{stats.total}</h3>
+                  <p>Tổng Lịch Đặt</p>
+                </div>
+              </div>
+              <div className="stat-card pending">
+                <div className="stat-icon">⏳</div>
+                <div className="stat-info">
+                  <h3>{stats.pending}</h3>
+                  <p>Chờ Xác Nhận</p>
+                </div>
+              </div>
+              <div className="stat-card confirmed">
+                <div className="stat-icon">✅</div>
+                <div className="stat-info">
+                  <h3>{stats.confirmed}</h3>
+                  <p>Đã Xác Nhận</p>
+                </div>
+              </div>
+              <div className="stat-card completed">
+                <div className="stat-icon">🎉</div>
+                <div className="stat-info">
+                  <h3>{stats.completed}</h3>
+                  <p>Hoàn Thành</p>
+                </div>
+              </div>
+              <div className="stat-card revenue">
+                <div className="stat-icon">💰</div>
+                <div className="stat-info">
+                  <h3>{stats.totalRevenue.toLocaleString('vi-VN')}đ</h3>
+                  <p>Tổng Doanh Thu</p>
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="stat-card pending">
-            <div className="stat-icon">⏳</div>
-            <div className="stat-info">
-              <h3>{stats.pending}</h3>
-              <p>Chờ Xác Nhận</p>
-            </div>
-          </div>
-          <div className="stat-card confirmed">
-            <div className="stat-icon">✅</div>
-            <div className="stat-info">
-              <h3>{stats.confirmed}</h3>
-              <p>Đã Xác Nhận</p>
-            </div>
-          </div>
-          <div className="stat-card completed">
-            <div className="stat-icon">🎉</div>
-            <div className="stat-info">
-              <h3>{stats.completed}</h3>
-              <p>Hoàn Thành</p>
-            </div>
-          </div>
-          <div className="stat-card revenue">
-            <div className="stat-icon">💰</div>
-            <div className="stat-info">
-              <h3>{stats.totalRevenue.toLocaleString('vi-VN')}đ</h3>
-              <p>Tổng Doanh Thu</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Filters */}
-        <div className="admin-filters">
-          <div className="filter-group">
-            <label>Lọc theo trạng thái:</label>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="filter-select"
-            >
-              <option value="all">Tất cả</option>
-              <option value="pending">Chờ Xác Nhận</option>
-              <option value="confirmed">Đã Xác Nhận</option>
-              <option value="completed">Hoàn Thành</option>
-              <option value="cancelled">Đã Hủy</option>
-            </select>
-          </div>
+            {/* Filters */}
+            <div className="admin-filters">
+              <div className="filter-group">
+                <label>Lọc theo trạng thái:</label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="pending">Chờ Xác Nhận</option>
+                  <option value="confirmed">Đã Xác Nhận</option>
+                  <option value="completed">Hoàn Thành</option>
+                  <option value="cancelled">Đã Hủy</option>
+                </select>
+              </div>
 
-          <div className="filter-group">
-            <label>Lọc theo ngày:</label>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="filter-input"
-            />
-          </div>
+              <div className="filter-group">
+                <label>Lọc theo ngày:</label>
+                <input
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="filter-input"
+                />
+              </div>
 
-          <div className="filter-group search-group">
-            <label>Tìm kiếm:</label>
-            <input
-              type="text"
-              placeholder="Tên, email, SĐT, môn thể thao..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="filter-input search-input"
-            />
-          </div>
+              <div className="filter-group search-group">
+                <label>Tìm kiếm:</label>
+                <input
+                  type="text"
+                  placeholder="Tên, email, SĐT, môn thể thao..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="filter-input search-input"
+                />
+              </div>
 
-          <button
-            onClick={() => {
-              setFilterStatus('all');
-              setSearchTerm('');
-              setFilterDate('');
-            }}
-            className="reset-filters-btn"
-          >
-            Xóa Bộ Lọc
-          </button>
-        </div>
-
-        {/* Bookings Table */}
-        <div className="bookings-table-container">
-          <h2>Danh Sách Lịch Đặt ({filteredBookings.length})</h2>
-          {filteredBookings.length === 0 ? (
-            <div className="no-bookings">
-              <p>Không có lịch đặt nào.</p>
+              <button
+                onClick={() => {
+                  setFilterStatus('all');
+                  setSearchTerm('');
+                  setFilterDate('');
+                }}
+                className="reset-filters-btn"
+              >
+                Xóa Bộ Lọc
+              </button>
             </div>
-          ) : (
-            <div className="bookings-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Môn Thể Thao</th>
-                    <th>Sân</th>
-                    <th>Khách Hàng</th>
-                    <th>Liên Hệ</th>
-                    <th>Ngày & Giờ</th>
-                    <th>Thời Lượng</th>
-                    <th>Tổng Tiền</th>
-                    <th>Trạng Thái</th>
-                    <th>Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBookings.map((booking) => (
-                    <tr key={booking._id}>
-                      <td>
-                        <div className="sport-cell">
-                          <span className="sport-icon-small">
-                            {booking.sportId?.name === 'football' ? '⚽' : 
-                             booking.sportId?.name === 'badminton' ? '🏸' : 
-                             booking.sportId?.name === 'pickleball' ? '🏓' :
-                             booking.sportId?.name === 'tennis' ? '🎾' : 
-                             booking.sportId?.name === 'basketball' ? '🏀' :
-                             booking.sportId?.name === 'volleyball' ? '🏐' : '🏃'}
-                          </span>
-                          <span>{booking.sportId?.nameVi || booking.sportId?.name}</span>
-                        </div>
-                      </td>
-                      <td>{booking.facilityName}</td>
-                      <td>
-                        <div className="customer-cell">
-                          <strong>{booking.customerName}</strong>
-                          {booking.notes && (
-                            <span className="notes-badge" title={booking.notes}>📝</span>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="contact-cell">
-                          <div>{booking.customerPhone}</div>
-                          <div className="email-text">{booking.customerEmail}</div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="datetime-cell">
-                          <div>{format(new Date(booking.date), 'dd/MM/yyyy')}</div>
-                          <div className="time-text">{booking.startTime} - {booking.endTime}</div>
-                        </div>
-                      </td>
-                      <td>{booking.duration} giờ</td>
-                      <td className="price-cell">{booking.totalPrice?.toLocaleString('vi-VN')}đ</td>
-                      <td>
-                        <select
-                          value={booking.status}
-                          onChange={(e) => updateBookingStatus(booking._id, e.target.value)}
-                          className={`status-select ${getStatusColor(booking.status)}`}
-                        >
-                          <option value="pending">Chờ Xác Nhận</option>
-                          <option value="confirmed">Đã Xác Nhận</option>
-                          <option value="completed">Hoàn Thành</option>
-                          <option value="cancelled">Đã Hủy</option>
-                        </select>
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button
-                            onClick={() => deleteBooking(booking._id)}
-                            className="delete-btn"
-                            title="Xóa"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            {/* Bookings Table */}
+            <div className="bookings-table-container">
+              <h2>Danh Sách Lịch Đặt ({filteredBookings.length})</h2>
+              {filteredBookings.length === 0 ? (
+                <div className="no-bookings">
+                  <p>Không có lịch đặt nào.</p>
+                </div>
+              ) : (
+                <div className="bookings-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Môn Thể Thao</th>
+                        <th>Sân</th>
+                        <th>Khách Hàng</th>
+                        <th>Liên Hệ</th>
+                        <th>Ngày & Giờ</th>
+                        <th>Thời Lượng</th>
+                        <th>Tổng Tiền</th>
+                        <th>Trạng Thái</th>
+                        <th>Thao Tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBookings.map((booking) => (
+                        <tr key={booking.id}>
+                          <td>
+                            <div className="sport-cell">
+                              <span className="sport-icon-small">
+                                {booking.sport?.name === 'football' ? '⚽' :
+                                  booking.sport?.name === 'badminton' ? '🏸' :
+                                    booking.sport?.name === 'pickleball' ? '🏓' :
+                                      booking.sport?.name === 'tennis' ? '🎾' :
+                                        booking.sport?.name === 'basketball' ? '🏀' :
+                                          booking.sport?.name === 'volleyball' ? '🏐' : '🏃'}
+                              </span>
+                              <span>{booking.sport?.nameVi || booking.sport?.name}</span>
+                            </div>
+                          </td>
+                          <td>{booking.facilityName}</td>
+                          <td>
+                            <div className="customer-cell">
+                              <strong>{booking.customerName}</strong>
+                              {booking.notes && (
+                                <span className="notes-badge" title={booking.notes}>📝</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="contact-cell">
+                              <div>{booking.customerPhone}</div>
+                              <div className="email-text">{booking.customerEmail}</div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="datetime-cell">
+                              <div>{format(new Date(booking.date), 'dd/MM/yyyy')}</div>
+                              <div className="time-text">{booking.startTime} - {booking.endTime}</div>
+                            </div>
+                          </td>
+                          <td>{booking.duration} giờ</td>
+                          <td className="price-cell">{booking.totalPrice?.toLocaleString('vi-VN')}đ</td>
+                          <td>
+                            <select
+                              value={booking.status}
+                              onChange={(e) => updateBookingStatus(booking.id, e.target.value)}
+                              className={`status-select ${getStatusColor(booking.status)}`}
+                            >
+                              <option value="pending">Chờ Xác Nhận</option>
+                              <option value="confirmed">Đã Xác Nhận</option>
+                              <option value="completed">Hoàn Thành</option>
+                              <option value="cancelled">Đã Hủy</option>
+                            </select>
+                          </td>
+                          <td>
+                            <div className="action-buttons">
+                              <button
+                                onClick={() => deleteBooking(booking.id)}
+                                className="delete-btn"
+                                title="Xóa"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
           </>
         )}
 
@@ -433,10 +433,10 @@ const Admin = () => {
                   </thead>
                   <tbody>
                     {filteredUsers.map((u) => (
-                      <tr key={u._id}>
+                      <tr key={u.id}>
                         <td>
                           <strong>{u.name}</strong>
-                          {u._id === user?._id && (
+                          {u.id === user?.id && (
                             <span className="current-user-badge"> (Bạn)</span>
                           )}
                         </td>
@@ -445,9 +445,9 @@ const Admin = () => {
                         <td>
                           <select
                             value={u.role}
-                            onChange={(e) => updateUserRole(u._id, e.target.value)}
+                            onChange={(e) => updateUserRole(u.id, e.target.value)}
                             className={`role-select ${u.role === 'admin' ? 'admin-role' : 'user-role'}`}
-                            disabled={u._id === user?._id}
+                            disabled={u.id === user?.id}
                           >
                             <option value="user">User</option>
                             <option value="admin">Admin</option>
@@ -455,9 +455,9 @@ const Admin = () => {
                         </td>
                         <td>{format(new Date(u.createdAt), 'dd/MM/yyyy')}</td>
                         <td>
-                          {u._id !== user?._id && (
+                          {u.id !== user?.id && (
                             <button
-                              onClick={() => deleteUser(u._id)}
+                              onClick={() => deleteUser(u.id)}
                               className="delete-user-btn"
                               title="Xóa user"
                             >

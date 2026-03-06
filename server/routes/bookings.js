@@ -3,14 +3,15 @@ const router = express.Router();
 const Booking = require('../models/Booking');
 const Sport = require('../models/Sport');
 const { body, validationResult } = require('express-validator');
-const { auth } = require('../middleware/auth');
+const { auth, admin } = require('../middleware/auth');
 const { sendBookingConfirmationEmail, sendConfirmedBookingEmail } = require('../utils/emailService');
+const { Op } = require('sequelize'); // Import Sequelize operators
 
 // Get all bookings (with optional user filter)
 // Note: This route is public but will filter by user email if token is provided
 router.get('/', async (req, res) => {
   try {
-    const query = {};
+    const where = {};
     // If Authorization header exists, try to get user
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (token) {
@@ -19,15 +20,42 @@ router.get('/', async (req, res) => {
         const { JWT_SECRET } = require('../middleware/auth');
         const decoded = jwt.verify(token, JWT_SECRET);
         const User = require('../models/User');
-        const user = await User.findById(decoded.userId);
+        const user = await User.findByPk(decoded.userId);
         if (user && user.role !== 'admin') {
-          query.customerEmail = user.email;
+          // Only filter by user email if NOT fetching for schedule view
+          if (!req.query.date && !req.query.sportId) {
+            where.customerEmail = user.email;
+          }
         }
       } catch (err) {
         // Invalid token, continue without filter
       }
     }
-    const bookings = await Booking.find(query).populate('sportId').sort({ date: -1, startTime: -1 });
+
+    // Filter by date if provided - use literal to avoid timezone issues with DATEONLY
+    if (req.query.date) {
+      const { Op } = require('sequelize');
+      const { sequelize: seq } = require('../config/database');
+      where.date = seq.where(seq.fn('DATE', seq.col('date')), req.query.date);
+    }
+
+    // Filter by sportId if provided
+    if (req.query.sportId) {
+      where.sportId = parseInt(req.query.sportId);
+    }
+
+    const bookings = await Booking.findAll({
+      where,
+      include: [{
+        model: Sport,
+        as: 'sport'
+      }],
+      order: [
+        ['date', 'DESC'],
+        ['startTime', 'DESC']
+      ]
+    });
+
     res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -37,16 +65,17 @@ router.get('/', async (req, res) => {
 // Get bookings by date
 router.get('/date/:date', async (req, res) => {
   try {
-    const date = new Date(req.params.date);
-    const startOfDay = new Date(date.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+    const date = req.params.date; // Format: YYYY-MM-DD
 
-    const bookings = await Booking.find({
-      date: {
-        $gte: startOfDay,
-        $lte: endOfDay
-      }
-    }).populate('sportId');
+    const bookings = await Booking.findAll({
+      where: {
+        date: date
+      },
+      include: [{
+        model: Sport,
+        as: 'sport'
+      }]
+    });
 
     res.json(bookings);
   } catch (error) {
@@ -57,10 +86,17 @@ router.get('/date/:date', async (req, res) => {
 // Get single booking
 router.get('/:id', async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.id).populate('sportId');
+    const booking = await Booking.findByPk(req.params.id, {
+      include: [{
+        model: Sport,
+        as: 'sport'
+      }]
+    });
+
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
+
     res.json(booking);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -68,7 +104,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create booking
-router.post('/', [
+router.post('/', auth, [
   body('customerName').notEmpty().withMessage('Tên khách hàng là bắt buộc'),
   body('customerPhone').notEmpty().withMessage('Số điện thoại là bắt buộc'),
   body('customerEmail').isEmail().withMessage('Email không hợp lệ'),
@@ -82,26 +118,33 @@ router.post('/', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { sportId, facilityName, customerName, customerPhone, customerEmail, date, startTime, endTime, notes } = req.body;
+    const { sportId, facilityName, facilityAddress, facilityPhone, customerName, customerPhone, customerEmail, date, startTime, endTime, notes } = req.body;
 
     // Check if sport exists
-    const sport = await Sport.findById(sportId);
+    const sport = await Sport.findByPk(sportId);
     if (!sport) {
       return res.status(404).json({ message: 'Môn thể thao không tồn tại' });
     }
 
     // Check for conflicts
+    // Sequelize: Check if there's an overlapping booking
     const existingBooking = await Booking.findOne({
-      sportId,
-      facilityName,
-      date: new Date(date),
-      status: { $in: ['pending', 'confirmed'] },
-      $or: [
-        {
-          startTime: { $lt: endTime },
-          endTime: { $gt: startTime }
-        }
-      ]
+      where: {
+        sportId,
+        facilityName,
+        date: date,
+        status: {
+          [Op.in]: ['pending', 'confirmed']
+        },
+        [Op.or]: [
+          {
+            [Op.and]: [
+              { startTime: { [Op.lt]: endTime } },
+              { endTime: { [Op.gt]: startTime } }
+            ]
+          }
+        ]
+      }
     });
 
     if (existingBooking) {
@@ -114,13 +157,15 @@ router.post('/', [
     const duration = (end - start) / (1000 * 60 * 60); // hours
     const totalPrice = duration * sport.pricePerHour;
 
-    const booking = new Booking({
+    const booking = await Booking.create({
       sportId,
       facilityName,
+      facilityAddress: facilityAddress || '',
+      facilityPhone: facilityPhone || '',
       customerName,
       customerPhone,
       customerEmail,
-      date: new Date(date),
+      date: date,
       startTime,
       endTime,
       duration,
@@ -129,11 +174,18 @@ router.post('/', [
       status: 'pending'
     });
 
-    await booking.save();
-    const populatedBooking = await Booking.findById(booking._id).populate('sportId');
+    // Fetch with sport info
+    const populatedBooking = await Booking.findByPk(booking.id, {
+      include: [{
+        model: Sport,
+        as: 'sport'
+      }]
+    });
 
     // Send confirmation email (don't block if email fails)
-    sendBookingConfirmationEmail(populatedBooking)
+    // Convert to plain JSON so associations (sport) are accessible in email template
+    const bookingData = populatedBooking.toJSON();
+    sendBookingConfirmationEmail(bookingData)
       .then((result) => {
         if (result.success) {
           console.log(`✅ Confirmation email sent to ${customerEmail}`);
@@ -152,47 +204,56 @@ router.post('/', [
 });
 
 // Update booking status
-router.put('/:id/status', async (req, res) => {
+router.put('/:id/status', auth, admin, async (req, res) => {
   try {
     const { status } = req.body;
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, runValidators: true }
-    ).populate('sportId');
 
+    const booking = await Booking.findByPk(req.params.id);
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
+    await booking.update({ status });
+
+    // Fetch updated booking with sport info
+    const updatedBooking = await Booking.findByPk(req.params.id, {
+      include: [{
+        model: Sport,
+        as: 'sport'
+      }]
+    });
+
     // Send confirmation email when status is changed to 'confirmed'
     if (status === 'confirmed') {
-      sendConfirmedBookingEmail(booking)
+      const updatedBookingData = updatedBooking.toJSON();
+      sendConfirmedBookingEmail(updatedBookingData)
         .then((result) => {
           if (result.success) {
-            console.log(`✅ Confirmation email sent to ${booking.customerEmail}`);
+            console.log(`✅ Confirmation email sent to ${updatedBooking.customerEmail}`);
           } else {
-            console.error(`⚠️ Failed to send confirmation email to ${booking.customerEmail}:`, result.error);
+            console.error(`⚠️ Failed to send confirmation email to ${updatedBooking.customerEmail}:`, result.error);
           }
         })
         .catch((error) => {
-          console.error(`⚠️ Confirmation email sending error for ${booking.customerEmail}:`, error.message);
+          console.error(`⚠️ Confirmation email sending error for ${updatedBooking.customerEmail}:`, error.message);
         });
     }
 
-    res.json(booking);
+    res.json(updatedBooking);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 });
 
 // Delete booking
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, admin, async (req, res) => {
   try {
-    const booking = await Booking.findByIdAndDelete(req.params.id);
+    const booking = await Booking.findByPk(req.params.id);
     if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
+
+    await booking.destroy();
     res.json({ message: 'Booking deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -5,7 +5,7 @@ const FieldCard = ({ facility }) => {
     const navigate = useNavigate();
 
     const handleViewDetails = () => {
-        navigate(`/booking/${facility.sportId?._id || facility.sportId}`);
+        navigate(`/facility/${facility.id}`);
     };
 
     return (
@@ -28,9 +28,9 @@ const FieldCard = ({ facility }) => {
                     </div>
                 )}
                 {/* Badge */}
-                <div className="absolute top-3 left-3 bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
+                <div className={`absolute top-3 left-3 ${facility.status === 'active' ? 'bg-green-500' : 'bg-red-500'} text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1`}>
                     <span>●</span>
-                    <span>Đang hoạt động</span>
+                    <span>{facility.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'}</span>
                 </div>
             </div>
 

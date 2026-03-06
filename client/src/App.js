@@ -12,7 +12,14 @@ import BookingsList from './pages/BookingsList';
 import AdminDashboard from './pages/AdminDashboard';
 import FieldsList from './pages/FieldsList';
 import TermsOfService from './pages/TermsOfService';
+import ForgotPassword from './pages/ForgotPassword';
+import FacilityDetail from './pages/FacilityDetail';
+import Profile from './pages/Profile';
+import Statistics from './pages/Statistics';
+import NotFound from './pages/NotFound';
+import Contact from './pages/Contact';
 import AdminRoute from './components/AdminRoute';
+import ChatBot from './components/ChatBot';
 import './App.css';
 
 function AppContent() {
@@ -24,14 +31,31 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/fields" element={<FieldsList />} />
+          <Route path="/facility/:id" element={<FacilityDetail />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
-          <Route path="/booking/:sportId?" element={<Booking />} />
+          <Route
+            path="/booking/:sportId?"
+            element={
+              <ProtectedRoute>
+                <Booking />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/bookings"
             element={
               <ProtectedRoute>
                 <BookingsList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
               </ProtectedRoute>
             }
           />
@@ -43,9 +67,20 @@ function AppContent() {
               </AdminRoute>
             }
           />
+          <Route
+            path="/statistics"
+            element={
+              <AdminRoute>
+                <Statistics />
+              </AdminRoute>
+            }
+          />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <Footer />
+      <ChatBot />
     </div>
   );
 }

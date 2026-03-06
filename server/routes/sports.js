@@ -1,21 +1,33 @@
 const express = require('express');
 const router = express.Router();
 const Sport = require('../models/Sport');
+const Facility = require('../models/Facility');
 
-// Get all sports
+// Get all sports (with facilities)
 router.get('/', async (req, res) => {
   try {
-    const sports = await Sport.find();
+    const sports = await Sport.findAll({
+      include: [{
+        model: Facility,
+        as: 'facilities',
+        required: false // LEFT JOIN (show sports even without facilities)
+      }]
+    });
     res.json(sports);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Get single sport
+// Get single sport (with facilities)
 router.get('/:id', async (req, res) => {
   try {
-    const sport = await Sport.findById(req.params.id);
+    const sport = await Sport.findByPk(req.params.id, {
+      include: [{
+        model: Facility,
+        as: 'facilities'
+      }]
+    });
     if (!sport) {
       return res.status(404).json({ message: 'Sport not found' });
     }
@@ -28,8 +40,7 @@ router.get('/:id', async (req, res) => {
 // Create sport (admin)
 router.post('/', async (req, res) => {
   try {
-    const sport = new Sport(req.body);
-    await sport.save();
+    const sport = await Sport.create(req.body);
     res.status(201).json(sport);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -39,14 +50,12 @@ router.post('/', async (req, res) => {
 // Update sport
 router.put('/:id', async (req, res) => {
   try {
-    const sport = await Sport.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const sport = await Sport.findByPk(req.params.id);
     if (!sport) {
       return res.status(404).json({ message: 'Sport not found' });
     }
+
+    await sport.update(req.body);
     res.json(sport);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -56,10 +65,12 @@ router.put('/:id', async (req, res) => {
 // Delete sport
 router.delete('/:id', async (req, res) => {
   try {
-    const sport = await Sport.findByIdAndDelete(req.params.id);
+    const sport = await Sport.findByPk(req.params.id);
     if (!sport) {
       return res.status(404).json({ message: 'Sport not found' });
     }
+
+    await sport.destroy();
     res.json({ message: 'Sport deleted successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });

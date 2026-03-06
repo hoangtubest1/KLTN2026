@@ -1,13 +1,115 @@
 const express = require('express');
 const router = express.Router();
+const { Sequelize } = require('sequelize');
 const Facility = require('../models/Facility');
+const Sport = require('../models/Sport');
+const Review = require('../models/Review');
 
-// Get all facilities
+// Haversine formula - calculate distance between two GPS points (km)
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// Advanced search facilities
+// GET /api/facilities/search?sport=1&name=sân&area=quận 1&minPrice=100000&maxPrice=300000&lat=10.78&lng=106.69&sort=distance
+router.get('/search', async (req, res) => {
+    try {
+        const { Op } = require('sequelize');
+        const { sport, name, area, minPrice, maxPrice, lat, lng, sort } = req.query;
+
+        // Build WHERE conditions
+        const where = {};
+
+        if (sport) {
+            where.sportId = parseInt(sport);
+        }
+
+        if (name) {
+            where.name = { [Op.like]: `%${name}%` };
+        }
+
+        if (area) {
+            where.address = { [Op.like]: `%${area}%` };
+        }
+
+        if (minPrice || maxPrice) {
+            where.pricePerHour = {};
+            if (minPrice) where.pricePerHour[Op.gte] = parseFloat(minPrice);
+            if (maxPrice) where.pricePerHour[Op.lte] = parseFloat(maxPrice);
+        }
+
+        const facilities = await Facility.findAll({
+            where,
+            include: [{
+                model: Sport,
+                as: 'sport',
+                attributes: ['id', 'name', 'nameVi']
+            }],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Add distance if user provided coordinates
+        let results = facilities.map(f => {
+            const facility = f.toJSON();
+            if (lat && lng && facility.latitude && facility.longitude) {
+                facility.distance = Math.round(
+                    haversineDistance(parseFloat(lat), parseFloat(lng), facility.latitude, facility.longitude) * 10
+                ) / 10; // Round to 1 decimal
+            }
+            return facility;
+        });
+
+        // Sort results
+        if (sort === 'price_asc') {
+            results.sort((a, b) => a.pricePerHour - b.pricePerHour);
+        } else if (sort === 'price_desc') {
+            results.sort((a, b) => b.pricePerHour - a.pricePerHour);
+        } else if (sort === 'distance' && lat && lng) {
+            results.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+        } else if (sort === 'name') {
+            results.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+        }
+
+        res.json(results);
+    } catch (error) {
+        console.error('Error searching facilities:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Get all facilities (with sport info + avgRating + reviewCount)
 router.get('/', async (req, res) => {
     try {
-        const facilities = await Facility.find()
-            .populate('sportId', 'name nameVi emoji')
-            .sort({ createdAt: -1 });
+        const facilities = await Facility.findAll({
+            include: [
+                {
+                    model: Sport,
+                    as: 'sport',
+                    attributes: ['id', 'name', 'nameVi']
+                },
+                {
+                    model: Review,
+                    as: 'reviews',
+                    attributes: []
+                }
+            ],
+            attributes: {
+                include: [
+                    [Sequelize.fn('AVG', Sequelize.col('reviews.rating')), 'avgRating'],
+                    [Sequelize.fn('COUNT', Sequelize.col('reviews.id')), 'reviewCount']
+                ]
+            },
+            group: ['Facility.id', 'sport.id'],
+            order: [['createdAt', 'DESC']],
+            subQuery: false
+        });
         res.json(facilities);
     } catch (error) {
         console.error('Error fetching facilities:', error);
@@ -18,8 +120,13 @@ router.get('/', async (req, res) => {
 // Get single facility
 router.get('/:id', async (req, res) => {
     try {
-        const facility = await Facility.findById(req.params.id)
-            .populate('sportId', 'name nameVi emoji');
+        const facility = await Facility.findByPk(req.params.id, {
+            include: [{
+                model: Sport,
+                as: 'sport',
+                attributes: ['id', 'name', 'nameVi']
+            }]
+        });
 
         if (!facility) {
             return res.status(404).json({ message: 'Facility not found' });
@@ -31,13 +138,35 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// Get facilities by sport
+// Get facilities by sport (with avgRating + reviewCount)
 router.get('/sport/:sportId', async (req, res) => {
     try {
-        const facilities = await Facility.find({
-            sportId: req.params.sportId,
-            status: 'active'
-        }).populate('sportId', 'name nameVi emoji');
+        const facilities = await Facility.findAll({
+            where: {
+                sportId: req.params.sportId,
+                status: 'active'
+            },
+            include: [
+                {
+                    model: Sport,
+                    as: 'sport',
+                    attributes: ['id', 'name', 'nameVi']
+                },
+                {
+                    model: Review,
+                    as: 'reviews',
+                    attributes: []
+                }
+            ],
+            attributes: {
+                include: [
+                    [Sequelize.fn('AVG', Sequelize.col('reviews.rating')), 'avgRating'],
+                    [Sequelize.fn('COUNT', Sequelize.col('reviews.id')), 'reviewCount']
+                ]
+            },
+            group: ['Facility.id', 'sport.id'],
+            subQuery: false
+        });
 
         res.json(facilities);
     } catch (error) {
@@ -49,11 +178,16 @@ router.get('/sport/:sportId', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         console.log('Received facility data:', req.body);
-        const facility = new Facility(req.body);
-        await facility.save();
+        const facility = await Facility.create(req.body);
 
-        const populatedFacility = await Facility.findById(facility._id)
-            .populate('sportId', 'name nameVi emoji');
+        // Fetch with sport info
+        const populatedFacility = await Facility.findByPk(facility.id, {
+            include: [{
+                model: Sport,
+                as: 'sport',
+                attributes: ['id', 'name', 'nameVi']
+            }]
+        });
 
         res.status(201).json(populatedFacility);
     } catch (error) {
@@ -65,17 +199,24 @@ router.post('/', async (req, res) => {
 // Update facility (admin only)
 router.put('/:id', async (req, res) => {
     try {
-        const facility = await Facility.findByIdAndUpdate(
-            req.params.id,
-            { ...req.body, updatedAt: Date.now() },
-            { new: true, runValidators: true }
-        ).populate('sportId', 'name nameVi emoji');
+        const facility = await Facility.findByPk(req.params.id);
 
         if (!facility) {
             return res.status(404).json({ message: 'Facility not found' });
         }
 
-        res.json(facility);
+        await facility.update(req.body);
+
+        // Fetch updated facility with sport info
+        const updatedFacility = await Facility.findByPk(req.params.id, {
+            include: [{
+                model: Sport,
+                as: 'sport',
+                attributes: ['id', 'name', 'nameVi']
+            }]
+        });
+
+        res.json(updatedFacility);
     } catch (error) {
         res.status(400).json({ message: error.message });
     }
@@ -84,12 +225,13 @@ router.put('/:id', async (req, res) => {
 // Delete facility (admin only)
 router.delete('/:id', async (req, res) => {
     try {
-        const facility = await Facility.findByIdAndDelete(req.params.id);
+        const facility = await Facility.findByPk(req.params.id);
 
         if (!facility) {
             return res.status(404).json({ message: 'Facility not found' });
         }
 
+        await facility.destroy();
         res.json({ message: 'Facility deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: error.message });

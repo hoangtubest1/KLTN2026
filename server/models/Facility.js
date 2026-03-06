@@ -1,58 +1,107 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-const facilitySchema = new mongoose.Schema({
+const Facility = sequelize.define('Facility', {
+    id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+    },
     name: {
-        type: String,
-        required: true,
-        trim: true
+        type: DataTypes.STRING(100),
+        allowNull: false,
+        validate: {
+            notEmpty: {
+                msg: 'Facility name is required'
+            }
+        }
     },
     sportId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Sport',
-        required: true
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+            model: 'sports', // Tên table
+            key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE' // Xóa sport → xóa facilities
     },
     phone: {
-        type: String,
-        required: true,
-        trim: true
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        validate: {
+            notEmpty: {
+                msg: 'Phone is required'
+            }
+        }
     },
     address: {
-        type: String,
-        required: true,
-        trim: true
+        type: DataTypes.STRING(255),
+        allowNull: false,
+        validate: {
+            notEmpty: {
+                msg: 'Address is required'
+            }
+        }
     },
     image: {
-        type: String,
-        default: ''
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        defaultValue: ''
     },
     description: {
-        type: String,
-        default: ''
+        type: DataTypes.TEXT,
+        allowNull: true,
+        defaultValue: ''
+    },
+    courtCount: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+        validate: {
+            min: 1
+        }
     },
     pricePerHour: {
-        type: Number,
-        required: true,
-        min: 0
+        type: DataTypes.DECIMAL(10, 2),
+        allowNull: false,
+        validate: {
+            min: {
+                args: [0],
+                msg: 'Price must be positive'
+            }
+        }
+    },
+    latitude: {
+        type: DataTypes.DOUBLE,
+        allowNull: true,
+        validate: {
+            min: -90,
+            max: 90
+        }
+    },
+    longitude: {
+        type: DataTypes.DOUBLE,
+        allowNull: true,
+        validate: {
+            min: -180,
+            max: 180
+        }
+    },
+    pricingSchedule: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: []
+        // Format: [{startTime: "06:00", endTime: "12:00", price: 100000}, ...]
     },
     status: {
-        type: String,
-        enum: ['active', 'inactive'],
-        default: 'active'
-    },
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date,
-        default: Date.now
+        type: DataTypes.ENUM('active', 'inactive'),
+        defaultValue: 'active',
+        allowNull: false
     }
+}, {
+    tableName: 'facilities',
+    timestamps: true // createdAt, updatedAt
 });
 
-// Update the updatedAt timestamp before saving
-facilitySchema.pre('save', function (next) {
-    this.updatedAt = Date.now();
-    next();
-});
-
-module.exports = mongoose.model('Facility', facilitySchema);
+module.exports = Facility;

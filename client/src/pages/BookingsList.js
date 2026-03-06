@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api';
 import { format } from 'date-fns';
 import './BookingsList.css';
 
@@ -16,7 +16,7 @@ const BookingsList = () => {
     try {
       setLoading(true);
       // Fetch all bookings (will be filtered by user on backend if authenticated)
-      const response = await axios.get('http://localhost:5000/api/bookings');
+      const response = await api.get('/bookings');
       // Filter by date on frontend
       const filteredBookings = response.data.filter(booking => {
         const bookingDate = format(new Date(booking.date), 'yyyy-MM-dd');
@@ -90,18 +90,31 @@ const BookingsList = () => {
         ) : (
           <div className="bookings-grid">
             {bookings.map((booking) => (
-              <div key={booking._id} className="booking-card">
+              <div key={booking.id} className="booking-card">
                 <div className="booking-header">
-                  <h3>{booking.sportId?.nameVi || booking.sportId?.name}</h3>
+                  <h3>{booking.sport?.nameVi || booking.sport?.name || 'N/A'}</h3>
                   <span className={`status ${getStatusColor(booking.status)}`}>
                     {getStatusText(booking.status)}
                   </span>
                 </div>
-                
+
+                <div className="info-item" style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #e0e0e0' }}>
+                  <strong>Mã đặt sân:</strong> <span style={{ color: '#667eea', fontWeight: 'bold' }}>#{String(booking.id).padStart(4, '0')}</span>
+                </div>
                 <div className="booking-info">
                   <div className="info-item">
                     <strong>Sân:</strong> {booking.facilityName}
                   </div>
+                  {booking.facilityAddress && (
+                    <div className="info-item">
+                      <strong>Địa chỉ:</strong> {booking.facilityAddress}
+                    </div>
+                  )}
+                  {booking.facilityPhone && (
+                    <div className="info-item">
+                      <strong>SĐT sân:</strong> {booking.facilityPhone}
+                    </div>
+                  )}
                   <div className="info-item">
                     <strong>Ngày:</strong> {format(new Date(booking.date), 'dd/MM/yyyy')}
                   </div>

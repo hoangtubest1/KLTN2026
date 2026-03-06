@@ -169,7 +169,7 @@ Một số tính năng có thể thêm vào:
 - Quản lý admin panel
 - Đánh giá và bình luận
 - Thống kê và báo cáo
-
+- Lưu trữ database 
 ## License
 
 MIT

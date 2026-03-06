@@ -2,29 +2,29 @@ const nodemailer = require('nodemailer');
 
 // Create transporter with Gmail configuration
 const createTransporter = () => {
-    return nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD,
-        },
-    });
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST,
+    port: process.env.EMAIL_PORT,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD,
+    },
+  });
 };
 
 // Generate HTML email template for booking confirmation (pending status)
 const generateBookingEmailHTML = (booking) => {
-    const { customerName, sportId, facilityName, date, startTime, endTime, duration, totalPrice } = booking;
+  const { customerName, sport, facilityName, date, startTime, endTime, duration, totalPrice } = booking;
 
-    const formattedDate = new Date(date).toLocaleDateString('vi-VN', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+  const formattedDate = new Date(date).toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="vi">
     <head>
@@ -130,7 +130,7 @@ const generateBookingEmailHTML = (booking) => {
         <div class="booking-details">
           <div class="detail-row">
             <span class="detail-label">🏃 Môn thể thao:</span>
-            <span class="detail-value">${sportId.name}</span>
+            <span class="detail-value">${sport?.nameVi || sport?.name || 'N/A'}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">🏟️ Sân:</span>
@@ -175,16 +175,16 @@ const generateBookingEmailHTML = (booking) => {
 
 // Generate HTML email template for confirmed bookings
 const generateConfirmedBookingEmailHTML = (booking) => {
-    const { customerName, sportId, facilityName, date, startTime, endTime, duration, totalPrice } = booking;
+  const { customerName, sport, facilityName, date, startTime, endTime, duration, totalPrice } = booking;
 
-    const formattedDate = new Date(date).toLocaleDateString('vi-VN', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+  const formattedDate = new Date(date).toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
-    return `
+  return `
     <!DOCTYPE html>
     <html lang="vi">
     <head>
@@ -310,7 +310,7 @@ const generateConfirmedBookingEmailHTML = (booking) => {
         <div class="booking-details">
           <div class="detail-row">
             <span class="detail-label">🏃 Môn thể thao:</span>
-            <span class="detail-value">${sportId.name}</span>
+            <span class="detail-value">${sport?.nameVi || sport?.name || 'N/A'}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">🏟️ Sân:</span>
@@ -364,47 +364,182 @@ const generateConfirmedBookingEmailHTML = (booking) => {
 
 // Send booking confirmation email
 const sendBookingConfirmationEmail = async (booking) => {
-    try {
-        const transporter = createTransporter();
+  try {
+    const transporter = createTransporter();
 
-        const mailOptions = {
-            from: process.env.EMAIL_FROM,
-            to: booking.customerEmail,
-            subject: `✅ Xác nhận đặt sân - ${booking.sportId.name} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
-            html: generateBookingEmailHTML(booking),
-        };
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: booking.customerEmail,
+      subject: `✅ Xác nhận đặt sân - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
+      html: generateBookingEmailHTML(booking),
+    };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('✅ Email sent successfully:', info.messageId);
-        return { success: true, messageId: info.messageId };
-    } catch (error) {
-        console.error('❌ Error sending email:', error.message);
-        return { success: false, error: error.message };
-    }
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Error sending email:', error.message);
+    return { success: false, error: error.message };
+  }
 };
 
 // Send confirmed booking email
 const sendConfirmedBookingEmail = async (booking) => {
-    try {
-        const transporter = createTransporter();
+  try {
+    const transporter = createTransporter();
 
-        const mailOptions = {
-            from: process.env.EMAIL_FROM,
-            to: booking.customerEmail,
-            subject: `🎉 Đặt sân đã được xác nhận - ${booking.sportId.name} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
-            html: generateConfirmedBookingEmailHTML(booking),
-        };
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: booking.customerEmail,
+      subject: `🎉 Đặt sân đã được xác nhận - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
+      html: generateConfirmedBookingEmailHTML(booking),
+    };
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('✅ Confirmed booking email sent successfully:', info.messageId);
-        return { success: true, messageId: info.messageId };
-    } catch (error) {
-        console.error('❌ Error sending confirmed booking email:', error.message);
-        return { success: false, error: error.message };
-    }
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Confirmed booking email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Error sending confirmed booking email:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+// Generate HTML email template for password reset OTP
+const generatePasswordResetEmailHTML = (otp) => {
+  return `
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f4f4f4;
+        }
+        .container {
+          background-color: #ffffff;
+          border-radius: 10px;
+          padding: 30px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 10px 10px 0 0;
+          text-align: center;
+          margin: -30px -30px 30px -30px;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 24px;
+        }
+        .icon {
+          font-size: 48px;
+          margin-bottom: 10px;
+        }
+        .otp-box {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 10px;
+          text-align: center;
+          margin: 25px 0;
+        }
+        .otp-code {
+          font-size: 36px;
+          font-weight: bold;
+          letter-spacing: 8px;
+          margin: 10px 0;
+        }
+        .otp-note {
+          font-size: 13px;
+          opacity: 0.9;
+        }
+        .warning-box {
+          background-color: #fef3c7;
+          border-left: 4px solid #f59e0b;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 5px;
+          font-size: 14px;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 30px;
+          padding-top: 20px;
+          border-top: 2px solid #e0e0e0;
+          color: #666;
+          font-size: 14px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="icon">🔐</div>
+          <h1>Đặt Lại Mật Khẩu</h1>
+        </div>
+        
+        <p>Xin chào,</p>
+        
+        <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn. Vui lòng sử dụng mã OTP bên dưới để tiếp tục:</p>
+        
+        <div class="otp-box">
+          <p class="otp-note">Mã xác nhận của bạn</p>
+          <div class="otp-code">${otp}</div>
+          <p class="otp-note">Mã có hiệu lực trong 10 phút</p>
+        </div>
+        
+        <div class="warning-box">
+          <strong>⚠️ Lưu ý:</strong>
+          <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+            <li>Không chia sẻ mã OTP này cho bất kỳ ai</li>
+            <li>Mã sẽ hết hạn sau 10 phút</li>
+            <li>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này</li>
+          </ul>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Sports Booking System</strong></p>
+          <p>Email: ${process.env.EMAIL_USER}</p>
+          <p>Đây là email tự động, vui lòng không trả lời. 🙏</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Send password reset OTP email
+const sendPasswordResetEmail = async (email, otp) => {
+  try {
+    const transporter = createTransporter();
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: `🔐 Mã đặt lại mật khẩu - Sports Booking`,
+      html: generatePasswordResetEmailHTML(otp),
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Password reset email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Error sending password reset email:', error.message);
+    return { success: false, error: error.message };
+  }
 };
 
 module.exports = {
-    sendBookingConfirmationEmail,
-    sendConfirmedBookingEmail,
+  sendBookingConfirmationEmail,
+  sendConfirmedBookingEmail,
+  sendPasswordResetEmail,
 };

@@ -1,50 +1,107 @@
-const mongoose = require('mongoose');
+const { DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
+const { sequelize } = require('../config/database');
 
-const userSchema = new mongoose.Schema({
+const User = sequelize.define('User', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true
+  },
   name: {
-    type: String,
-    required: true,
-    trim: true
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    validate: {
+      notEmpty: {
+        msg: 'Name is required'
+      }
+    }
   },
   email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-    trim: true
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    unique: {
+      msg: 'Email already exists'
+    },
+    validate: {
+      isEmail: {
+        msg: 'Must be a valid email address'
+      },
+      notEmpty: {
+        msg: 'Email is required'
+      }
+    },
+    set(value) {
+      // Tự động lowercase và trim
+      this.setDataValue('email', value.toLowerCase().trim());
+    }
   },
   phone: {
-    type: String,
-    required: true
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    validate: {
+      notEmpty: {
+        msg: 'Phone is required'
+      }
+    }
   },
   password: {
-    type: String,
-    required: true,
-    minlength: 6
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    validate: {
+      len: {
+        args: [6, 255],
+        msg: 'Password must be at least 6 characters'
+      }
+    }
   },
   role: {
-    type: String,
-    enum: ['user', 'admin'],
-    default: 'user'
+    type: DataTypes.ENUM('user', 'admin'),
+    defaultValue: 'user',
+    allowNull: false
   },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  resetPasswordOTP: {
+    type: DataTypes.STRING(6),
+    allowNull: true,
+    defaultValue: null
+  },
+  resetPasswordExpires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null
+  }
+}, {
+  tableName: 'users',
+  timestamps: true, // createdAt, updatedAt
+
+  // Hooks - Lifecycle events
+  hooks: {
+    // Hash password trước khi tạo user mới
+    beforeCreate: async (user) => {
+      if (user.password) {
+        user.password = await bcrypt.hash(user.password, 10);
+      }
+    },
+
+    // Hash password trước khi update (nếu password thay đổi)
+    beforeUpdate: async (user) => {
+      if (user.changed('password')) {
+        user.password = await bcrypt.hash(user.password, 10);
+      }
+    }
   }
 });
 
-// Hash password before saving
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
-});
-
-// Compare password method
-userSchema.methods.comparePassword = async function(candidatePassword) {
+// Instance method - So sánh password
+User.prototype.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+// Class method - Tìm user theo email
+User.findByEmail = async function (email) {
+  return await this.findOne({
+    where: { email: email.toLowerCase().trim() }
+  });
+};
 
+module.exports = User;
