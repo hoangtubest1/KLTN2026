@@ -27,6 +27,7 @@ app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', require('./routes/chatbot'));
+app.use('/api/payment', require('./routes/payment'));
 
 // Database connection
 const { sequelize, syncDatabase } = require('./models');

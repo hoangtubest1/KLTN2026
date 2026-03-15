@@ -43,13 +43,16 @@ const Booking = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
 
   // Booking form state
-  const today = format(new Date(), 'yyyy-MM-dd');
+  // Always compute "today" from a live clock so past-hour logic is real-time
+  const [now, setNow] = useState(new Date());
+  const today = format(now, 'yyyy-MM-dd');
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedStart, setSelectedStart] = useState('07:00');
   const [selectedDuration, setSelectedDuration] = useState(1);
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilityIdParam || '');
   const [selectedCourtNum, setSelectedCourtNum] = useState(1);
   const [notes, setNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('at_venue');
 
   // Conflict check
   const [bookedSlots, setBookedSlots] = useState([]);
@@ -68,6 +71,29 @@ const Booking = () => {
   }, [facilities]);
   useEffect(() => { setSelectedCourtNum(1); }, [selectedFacilityId]);
   useEffect(() => { checkConflict(); }, [selectedDate, selectedStart, selectedDuration, selectedFacilityId, selectedCourtNum, bookedSlots]);
+
+  // Refresh "now" every minute so past-hour checks stay accurate
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Helper: is a given time string (HH:mm) in the past for the selected date?
+  const isTimePast = (timeStr) => {
+    if (selectedDate > today) return false;
+    if (selectedDate < today) return true;
+    return timeToFloat(timeStr) <= (now.getHours() + now.getMinutes() / 60);
+  };
+
+  // Auto-select the first available (non-past) start time when the date is today
+  useEffect(() => {
+    if (selectedDate === today) {
+      const nextValid = START_TIMES.find(t => !isTimePast(t));
+      if (nextValid && isTimePast(selectedStart)) {
+        setSelectedStart(nextValid);
+      }
+    }
+  }, [selectedDate, now]);
 
   const fetchData = async () => {
     try {
@@ -108,12 +134,7 @@ const Booking = () => {
     setConflictMsg(conflict ? `⚠️ Sân này đã có lịch đặt từ ${(conflict.startTime || '').substring(0, 5)} – ${(conflict.endTime || '').substring(0, 5)}` : '');
   };
 
-  const isPastTimeSelected = () => {
-    if (selectedDate > today) return false;
-    if (selectedDate < today) return true;
-    const now = new Date();
-    return timeToFloat(selectedStart) <= (now.getHours() + now.getMinutes() / 60);
-  };
+  const isPastTimeSelected = () => isTimePast(selectedStart);
 
   const handleSubmit = async () => {
     if (!selectedFacility) return setMessage({ type: 'error', text: 'Vui lòng chọn sân' });
@@ -123,25 +144,39 @@ const Booking = () => {
 
     setSubmitting(true);
     setMessage({ type: '', text: '' });
+
+    const bookingData = {
+      sportId: Number(sportId),
+      facilityName: `${selectedFacility.name} - Sân ${selectedCourtNum}`,
+      facilityAddress: selectedFacility.address,
+      facilityPhone: selectedFacility.phone,
+      customerName: user?.name || '',
+      customerPhone: user?.phone || '',
+      customerEmail: user?.email || '',
+      date: selectedDate,
+      startTime: selectedStart,
+      endTime: selectedEnd,
+      duration: selectedDuration,
+      totalPrice,
+      notes,
+    };
+
     try {
-      await api.post('/bookings', {
-        sportId: Number(sportId),
-        facilityName: `${selectedFacility.name} - Sân ${selectedCourtNum}`,
-        facilityAddress: selectedFacility.address,
-        facilityPhone: selectedFacility.phone,
-        customerName: user?.name || '',
-        customerPhone: user?.phone || '',
-        customerEmail: user?.email || '',
-        date: selectedDate,
-        startTime: selectedStart,
-        endTime: selectedEnd,
-        duration: selectedDuration,
-        totalPrice,
-        notes,
-      });
-      setMessage({ type: 'success', text: 'Đặt sân thành công! Đang chuyển đến lịch đặt...' });
-      fetchBookedSlots();
-      setTimeout(() => navigate('/bookings'), 2000);
+      if (paymentMethod === 'vnpay') {
+        // VNPay payment flow
+        const res = await api.post('/payment/create_payment_url', bookingData);
+        window.location.href = res.data.paymentUrl;
+      } else if (paymentMethod === 'momo') {
+        // MoMo payment flow
+        const res = await api.post('/payment/create_momo_url', bookingData);
+        window.location.href = res.data.paymentUrl;
+      } else {
+        // At venue payment (existing flow)
+        await api.post('/bookings', bookingData);
+        setMessage({ type: 'success', text: 'Đặt sân thành công! Đang chuyển đến lịch đặt...' });
+        fetchBookedSlots();
+        setTimeout(() => navigate('/bookings'), 2000);
+      }
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại' });
     } finally {
@@ -184,10 +219,8 @@ const Booking = () => {
   };
 
   const isHourPast = (h) => {
-    const todayStr = today;
-    if (!selectedDate || selectedDate > todayStr) return false;
-    if (selectedDate < todayStr) return true;
-    const now = new Date();
+    if (!selectedDate || selectedDate > today) return false;
+    if (selectedDate < today) return true;
     return h < (now.getHours() + now.getMinutes() / 60);
   };
 
@@ -301,7 +334,14 @@ const Booking = () => {
                       onChange={e => setSelectedStart(e.target.value)}
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 text-gray-800 font-medium"
                     >
-                      {START_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                      {START_TIMES.map(t => {
+                        const past = isTimePast(t);
+                        return (
+                          <option key={t} value={t} disabled={past} style={past ? { color: '#aaa' } : {}}>
+                            {t}{past ? ' (đã qua)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                   <div>
@@ -370,6 +410,73 @@ const Booking = () => {
                     placeholder="Yêu cầu đặc biệt, số lượng người chơi..."
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 text-gray-800 text-sm resize-none"
                   />
+                </div>
+
+                {/* 6. Payment Method */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">💳 Phương thức thanh toán</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('at_venue')}
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        paymentMethod === 'at_venue'
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      {paymentMethod === 'at_venue' && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-2xl block mb-1">🏦</span>
+                      <span className="font-semibold text-gray-800 text-sm block">Tại sân</span>
+                      <span className="text-xs text-gray-500">Thanh toán khi đến</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('vnpay')}
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        paymentMethod === 'vnpay'
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      {paymentMethod === 'vnpay' && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-2xl block mb-1">💳</span>
+                      <span className="font-semibold text-gray-800 text-sm block">VNPay</span>
+                      <span className="text-xs text-gray-500">ATM / Visa / QR</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('momo')}
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        paymentMethod === 'momo'
+                          ? 'border-pink-500 bg-pink-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      {paymentMethod === 'momo' && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-2xl block mb-1">📱</span>
+                      <span className="font-semibold text-gray-800 text-sm block">MoMo</span>
+                      <span className="text-xs text-gray-500">Ví điện tử</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

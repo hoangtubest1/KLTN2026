@@ -109,6 +109,20 @@ const Booking = sequelize.define('Booking', {
   notes: {
     type: DataTypes.TEXT,
     allowNull: true
+  },
+  paymentMethod: {
+    type: DataTypes.ENUM('at_venue', 'vnpay', 'momo'),
+    defaultValue: 'at_venue',
+    allowNull: false
+  },
+  paymentStatus: {
+    type: DataTypes.ENUM('unpaid', 'paid', 'failed', 'refunded'),
+    defaultValue: 'unpaid',
+    allowNull: false
+  },
+  vnpayTxnRef: {
+    type: DataTypes.STRING(100),
+    allowNull: true
   }
 }, {
   tableName: 'bookings',

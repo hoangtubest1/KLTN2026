@@ -20,6 +20,7 @@ import NotFound from './pages/NotFound';
 import Contact from './pages/Contact';
 import AdminRoute from './components/AdminRoute';
 import ChatBot from './components/ChatBot';
+import PaymentResult from './pages/PaymentResult';
 import './App.css';
 
 function AppContent() {
@@ -76,6 +77,7 @@ function AppContent() {
             }
           />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/payment/result" element={<PaymentResult />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
