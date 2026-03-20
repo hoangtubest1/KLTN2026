@@ -51,8 +51,7 @@ router.get('/', async (req, res) => {
         as: 'sport'
       }],
       order: [
-        ['date', 'DESC'],
-        ['startTime', 'DESC']
+        ['createdAt', 'DESC']
       ]
     });
 
