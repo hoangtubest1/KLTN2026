@@ -77,8 +77,8 @@ sequelize.authenticate()
   .then(() => {
     console.log('✅ MySQL connection established successfully');
 
-    // Sync database - dùng alter: true để thêm cột mới, sau đó có thể đổi lại thành syncDatabase()
-    return syncDatabase({ alter: process.env.DB_ALTER === 'true' });
+    // Production: chỉ sync() tạo bảng nếu chưa có (không alter để tránh deadlock MySQL ENUM)
+    return syncDatabase({});
   })
   .catch((err) => {
     console.error('❌ MySQL connection error:', err.message);
