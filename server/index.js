@@ -44,6 +44,21 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/payment', require('./routes/payment'));
 
+// DEBUG - check env vars (DELETE AFTER USE)
+app.get('/api/debug', async (req, res) => {
+  const { User } = require('./models');
+  const userCount = await User.count().catch(() => -1);
+  res.json({
+    JWT_SECRET_SET: !!process.env.JWT_SECRET,
+    JWT_SECRET_LEN: process.env.JWT_SECRET?.length || 0,
+    DB_HOST: process.env.DB_HOST ? 'SET' : 'MISSING',
+    NODE_ENV: process.env.NODE_ENV,
+    USER_COUNT: userCount,
+  });
+});
+
+
+
 // Database connection
 const { sequelize, syncDatabase } = require('./models');
 
