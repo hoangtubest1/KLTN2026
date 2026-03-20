@@ -4,6 +4,34 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import { format } from 'date-fns';
 
+// Helper to extract Google Maps embed src from iframe or URL
+const extractMapSrc = (input) => {
+  if (!input) return '';
+  // If it's an iframe, extract src attribute
+  const srcMatch = input.match(/src="([^"]+)"/);
+  if (srcMatch) return srcMatch[1];
+  // If it's already a URL
+  if (input.startsWith('https://www.google.com/maps')) return input;
+  return '';
+};
+
+// Helper to extract lat/lng from Google Maps embed URL
+const extractLatLngFromEmbed = (embedUrl) => {
+  if (!embedUrl) return { lat: null, lng: null };
+  // Try !2d (lng) and !3d (lat) format from embed URL
+  const lngMatch = embedUrl.match(/!2d([\d.\-]+)/);
+  const latMatch = embedUrl.match(/!3d([\d.\-]+)/);
+  if (latMatch && lngMatch) {
+    return { lat: parseFloat(latMatch[1]), lng: parseFloat(lngMatch[1]) };
+  }
+  // Try @lat,lng format
+  const atMatch = embedUrl.match(/@([\d.\-]+),([\d.\-]+)/);
+  if (atMatch) {
+    return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+  }
+  return { lat: null, lng: null };
+};
+
 const AdminDashboard = () => {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -45,7 +73,10 @@ const AdminDashboard = () => {
     description: '',
     pricePerHour: '',
     status: 'active',
-    pricingSchedule: []
+    pricingSchedule: [],
+    latitude: null,
+    longitude: null,
+    mapEmbed: ''
   });
 
   // UI state
@@ -54,6 +85,16 @@ const AdminDashboard = () => {
   const [facilityFilter, setFacilityFilter] = useState({ sportId: '', status: '' });
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Vietnam address API state
+  const [apiVersion, setApiVersion] = useState('v1');
+  const [provinces, setProvinces] = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [wards, setWards] = useState([]);
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedWard, setSelectedWard] = useState('');
+  const [addressDetail, setAddressDetail] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -74,6 +115,75 @@ const AdminDashboard = () => {
       fetchFacilityData();
     }
   }, [isAuthenticated, user, filters, activeTab]);
+
+  // Fetch provinces when apiVersion changes
+  useEffect(() => {
+    setProvinces([]);
+    setDistricts([]);
+    setWards([]);
+    setSelectedProvince('');
+    setSelectedDistrict('');
+    setSelectedWard('');
+    fetch(`https://provinces.open-api.vn/api/${apiVersion}/p/`)
+      .then(res => res.json())
+      .then(data => setProvinces(data))
+      .catch(err => console.error('Error fetching provinces:', err));
+  }, [apiVersion]);
+
+  // Fetch districts/wards when province changes
+  useEffect(() => {
+    if (!selectedProvince) {
+      setDistricts([]);
+      setSelectedDistrict('');
+      setWards([]);
+      setSelectedWard('');
+      return;
+    }
+    fetch(`https://provinces.open-api.vn/api/${apiVersion}/p/${selectedProvince}?depth=2`)
+      .then(res => res.json())
+      .then(data => {
+        if (apiVersion === 'v2') {
+          // V2: Province > Ward (2 levels, no districts)
+          setDistricts([]);
+          setSelectedDistrict('');
+          setWards(data.wards || []);
+        } else {
+          // V1: Province > District > Ward (3 levels)
+          setDistricts(data.districts || []);
+          setWards([]);
+        }
+      })
+      .catch(err => console.error('Error fetching sub-divisions:', err));
+    setSelectedDistrict('');
+    setSelectedWard('');
+  }, [selectedProvince, apiVersion]);
+
+  // V1 only: Fetch wards when district changes
+  useEffect(() => {
+    if (apiVersion !== 'v1' || !selectedDistrict) {
+      if (apiVersion === 'v1') {
+        setWards([]);
+        setSelectedWard('');
+      }
+      return;
+    }
+    fetch(`https://provinces.open-api.vn/api/v1/d/${selectedDistrict}?depth=2`)
+      .then(res => res.json())
+      .then(data => setWards(data.wards || []))
+      .catch(err => console.error('Error fetching wards:', err));
+    setSelectedWard('');
+  }, [selectedDistrict, apiVersion]);
+
+  // Auto-compose address from selections
+  useEffect(() => {
+    const provinceName = provinces.find(p => String(p.code) === String(selectedProvince))?.name || '';
+    const districtName = apiVersion === 'v1' ? (districts.find(d => String(d.code) === String(selectedDistrict))?.name || '') : '';
+    const wardName = wards.find(w => String(w.code) === String(selectedWard))?.name || '';
+    const parts = [addressDetail, wardName, districtName, provinceName].filter(Boolean);
+    if (parts.length > 0) {
+      setFacilityForm(prev => ({ ...prev, address: parts.join(', ') }));
+    }
+  }, [selectedProvince, selectedDistrict, selectedWard, addressDetail, provinces, districts, wards, apiVersion]);
 
   const fetchBookingData = async () => {
     try {
@@ -150,8 +260,15 @@ const AdminDashboard = () => {
       image: '',
       description: '',
       pricePerHour: '',
-      status: 'active'
+      status: 'active',
+      latitude: null,
+      longitude: null,
+      mapEmbed: ''
     });
+    setSelectedProvince('');
+    setSelectedDistrict('');
+    setSelectedWard('');
+    setAddressDetail('');
     setShowFacilityModal(true);
   };
 
@@ -161,13 +278,28 @@ const AdminDashboard = () => {
       name: facility.name,
       sportId: facility.sport?.id || facility.sportId || '',
       phone: facility.phone,
-      address: facility.address,
+      address: facility.address || '',
       image: facility.image || '',
       description: facility.description || '',
       pricePerHour: facility.pricePerHour,
       status: facility.status,
-      pricingSchedule: facility.pricingSchedule || []
+      pricingSchedule: facility.pricingSchedule || [],
+      latitude: facility.latitude || null,
+      longitude: facility.longitude || null,
+      mapEmbed: facility.mapEmbed || ''
     });
+    // Try to match existing address to province/district/ward
+    setSelectedProvince('');
+    setSelectedDistrict('');
+    setSelectedWard('');
+    setAddressDetail(facility.address || '');
+    if (facility.address && provinces.length > 0) {
+      const matchedProvince = provinces.find(p => facility.address.includes(p.name));
+      if (matchedProvince) {
+        setSelectedProvince(String(matchedProvince.code));
+        // The remaining parts will be auto-populated by useEffect chains
+      }
+    }
     setShowFacilityModal(true);
   };
 
@@ -994,13 +1126,135 @@ const AdminDashboard = () => {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Địa Chỉ <span className="text-red-500">*</span>
                       </label>
-                      <textarea
-                        value={facilityForm.address}
-                        onChange={(e) => setFacilityForm({ ...facilityForm, address: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        rows="2"
-                        placeholder="Nhập địa chỉ đầy đủ"
+                      {/* Version toggle */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xs text-gray-500 font-medium">Phiên bản:</span>
+                        <button
+                          type="button"
+                          onClick={() => setApiVersion('v1')}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                            apiVersion === 'v1'
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                          }`}
+                        >
+                          V1 - Trước sáp nhập
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setApiVersion('v2')}
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                            apiVersion === 'v2'
+                              ? 'bg-green-600 text-white border-green-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
+                          }`}
+                        >
+                          V2 - Sau sáp nhập 07/2025
+                        </button>
+                      </div>
+                      <div className={`grid grid-cols-1 gap-3 mb-3 ${apiVersion === 'v1' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+                        {/* Tỉnh/Thành phố */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Tỉnh/Thành phố</label>
+                          <select
+                            value={selectedProvince}
+                            onChange={(e) => setSelectedProvince(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          >
+                            <option value="">-- Chọn Tỉnh/TP --</option>
+                            {provinces.map(p => (
+                              <option key={p.code} value={p.code}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {/* Quận/Huyện - chỉ hiển thị với V1 */}
+                        {apiVersion === 'v1' && (
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Quận/Huyện</label>
+                            <select
+                              value={selectedDistrict}
+                              onChange={(e) => setSelectedDistrict(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                              disabled={!selectedProvince}
+                            >
+                              <option value="">-- Chọn Quận/Huyện --</option>
+                              {districts.map(d => (
+                                <option key={d.code} value={d.code}>{d.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {/* Phường/Xã */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Phường/Xã</label>
+                          <select
+                            value={selectedWard}
+                            onChange={(e) => setSelectedWard(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            disabled={apiVersion === 'v1' ? !selectedDistrict : !selectedProvince}
+                          >
+                            <option value="">-- Chọn Phường/Xã --</option>
+                            {wards.map(w => (
+                              <option key={w.code} value={w.code}>{w.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {/* Địa chỉ chi tiết */}
+                      <input
+                        type="text"
+                        value={addressDetail}
+                        onChange={(e) => setAddressDetail(e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        placeholder="Số nhà, tên đường... (không bắt buộc)"
                       />
+                      {facilityForm.address && (
+                        <p className="text-xs text-gray-400 mt-1">📍 {facilityForm.address}</p>
+                      )}
+                    </div>
+
+                    {/* Google Maps Embed */}
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        🗺️ Nhúng Bản Đồ Google Maps
+                      </label>
+                      <p className="text-xs text-gray-400 mb-2">
+                        Vào Google Maps → Tìm sân → Chia sẻ → Nhúng bản đồ → Sao chép HTML rồi dán vào đây
+                      </p>
+                      <textarea
+                        value={facilityForm.mapEmbed || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const src = extractMapSrc(val);
+                          const coords = extractLatLngFromEmbed(src || val);
+                          setFacilityForm(prev => ({
+                            ...prev,
+                            mapEmbed: val,
+                            ...(coords.lat && coords.lng ? { latitude: coords.lat, longitude: coords.lng } : {})
+                          }));
+                        }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs font-mono"
+                        rows="3"
+                        placeholder='Dán mã <iframe src="https://www.google.com/maps/embed?pb=..." ...></iframe> vào đây'
+                      />
+                      {/* Map Preview */}
+                      {extractMapSrc(facilityForm.mapEmbed) && (
+                        <div className="mt-3 rounded-xl overflow-hidden border border-gray-200">
+                          <iframe
+                            src={extractMapSrc(facilityForm.mapEmbed)}
+                            width="100%"
+                            height="250"
+                            style={{ border: 0 }}
+                            allowFullScreen
+                            loading="lazy"
+                            referrerPolicy="no-referrer-when-downgrade"
+                            title="Google Maps"
+                          />
+                        </div>
+                      )}
+                      {facilityForm.latitude && facilityForm.longitude && (
+                        <p className="text-xs text-green-600 mt-1">✅ Tọa độ: {facilityForm.latitude.toFixed(6)}, {facilityForm.longitude.toFixed(6)}</p>
+                      )}
                     </div>
 
                     <div>

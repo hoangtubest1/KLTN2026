@@ -88,6 +88,11 @@ const Facility = sequelize.define('Facility', {
             max: 180
         }
     },
+    mapEmbed: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        defaultValue: ''
+    },
     pricingSchedule: {
         type: DataTypes.JSON,
         allowNull: true,

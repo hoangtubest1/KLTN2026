@@ -176,7 +176,11 @@ const FacilityDetail = () => {
                                     style={{ border: 0 }}
                                     loading="lazy"
                                     allowFullScreen
-                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(facility.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                    src={
+                                        facility.mapEmbed
+                                            ? (facility.mapEmbed.match(/src="([^"]+)"/) ? facility.mapEmbed.match(/src="([^"]+)"/)[1] : facility.mapEmbed)
+                                            : `https://maps.google.com/maps?q=${encodeURIComponent(facility.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`
+                                    }
                                 ></iframe>
                             </div>
                         </div>

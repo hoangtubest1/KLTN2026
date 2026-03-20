@@ -32,3 +32,93 @@
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
   }
 }
+
+/* ============================================================
+   📱 MOBILE-SPECIFIC STYLES (màn hình ≤ 480px)
+   ============================================================ */
+@media (max-width: 480px) {
+  body {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  h1 {
+    font-size: 1.75rem !important;
+  }
+
+  h2 {
+    font-size: 1.4rem !important;
+  }
+
+  h3 {
+    font-size: 1.15rem !important;
+  }
+
+  /* Button đủ lớn để tap (min 44px theo Apple HIG) */
+  button {
+    min-height: 44px;
+  }
+
+  /* Tránh iOS zoom khi focus input */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+}
+
+/* ============================================================
+   🚫 TẮT ANIMATION NẶNG trên mobile
+   ============================================================ */
+@media (max-width: 480px) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.15s !important;
+    transition-duration: 0.15s !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   📐 SAFE AREA — tránh notch & home indicator
+   ============================================================ */
+@media (max-width: 768px) {
+
+  nav.sticky,
+  nav.fixed {
+    padding-top: max(env(safe-area-inset-top, 0px), 0px);
+  }
+}
+
+/* ============================================================
+   🎯 TOUCH — finger-friendly interactions
+   ============================================================ */
+@media (max-width: 768px) {
+
+  a,
+  button {
+    -webkit-tap-highlight-color: rgba(37, 99, 235, 0.1);
+  }
+
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  button,
+  nav {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

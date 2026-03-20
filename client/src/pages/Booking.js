@@ -52,7 +52,8 @@ const Booking = () => {
   const [selectedFacilityId, setSelectedFacilityId] = useState(facilityIdParam || '');
   const [selectedCourtNum, setSelectedCourtNum] = useState(1);
   const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('at_venue');
+  const [paymentMethod, setPaymentMethod] = useState('vnpay');
+  const [paymentPlan, setPaymentPlan] = useState('pay_50');
 
   // Conflict check
   const [bookedSlots, setBookedSlots] = useState([]);
@@ -126,7 +127,7 @@ const Booking = () => {
     const startF = timeToFloat(selectedStart);
     const endF = timeToFloat(selectedEnd);
     const conflict = bookedSlots.find(b => {
-      if (b.facilityName !== fullName || b.status === 'cancelled') return false;
+      if (b.facilityName !== fullName || b.status === 'cancelled' || b.status === 'pending_payment') return false;
       const bStart = timeToFloat((b.startTime || '00:00').substring(0, 5));
       const bEnd = timeToFloat((b.endTime || '00:00').substring(0, 5));
       return startF < bEnd && endF > bStart;
@@ -162,20 +163,19 @@ const Booking = () => {
     };
 
     try {
+      const amountToPay = paymentPlan === 'pay_50' ? Math.round(totalPrice / 2) : totalPrice;
+      const paymentData = {
+        ...bookingData,
+        paymentPlan,
+        amountToPay,
+      };
+
       if (paymentMethod === 'vnpay') {
-        // VNPay payment flow
-        const res = await api.post('/payment/create_payment_url', bookingData);
+        const res = await api.post('/payment/create_payment_url', paymentData);
         window.location.href = res.data.paymentUrl;
       } else if (paymentMethod === 'momo') {
-        // MoMo payment flow
-        const res = await api.post('/payment/create_momo_url', bookingData);
+        const res = await api.post('/payment/create_momo_url', paymentData);
         window.location.href = res.data.paymentUrl;
-      } else {
-        // At venue payment (existing flow)
-        await api.post('/bookings', bookingData);
-        setMessage({ type: 'success', text: 'Đặt sân thành công! Đang chuyển đến lịch đặt...' });
-        fetchBookedSlots();
-        setTimeout(() => navigate('/bookings'), 2000);
       }
     } catch (err) {
       setMessage({ type: 'error', text: err.response?.data?.message || 'Có lỗi xảy ra, vui lòng thử lại' });
@@ -205,7 +205,7 @@ const Booking = () => {
     if (!selectedFacility) return null;
     const fullName = `${selectedFacility.name} - Sân ${selectedCourtNum}`;
     return bookedSlots.find(b => {
-      if (b.facilityName !== fullName || b.status === 'cancelled') return false;
+      if (b.facilityName !== fullName || b.status === 'cancelled' || b.status === 'pending_payment') return false;
       const bS = timeToFloat((b.startTime || '00:00').substring(0, 5));
       const bE = timeToFloat((b.endTime || '00:00').substring(0, 5));
       return h < bE && h + 1 > bS;
@@ -412,30 +412,55 @@ const Booking = () => {
                   />
                 </div>
 
-                {/* 6. Payment Method */}
+                {/* 6. Payment Plan */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">💳 Phương thức thanh toán</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">💰 Gói thanh toán</label>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('at_venue')}
+                      onClick={() => setPaymentPlan('pay_50')}
                       className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                        paymentMethod === 'at_venue'
+                        paymentPlan === 'pay_50'
                           ? 'border-blue-500 bg-blue-50 shadow-md'
                           : 'border-gray-200 bg-white hover:border-gray-300'
                       }`}
                     >
-                      {paymentMethod === 'at_venue' && (
+                      {paymentPlan === 'pay_50' && (
                         <span className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                           <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         </span>
                       )}
-                      <span className="text-2xl block mb-1">🏦</span>
-                      <span className="font-semibold text-gray-800 text-sm block">Tại sân</span>
-                      <span className="text-xs text-gray-500">Thanh toán khi đến</span>
+                      <span className="text-2xl block mb-1">💵</span>
+                      <span className="font-semibold text-gray-800 text-sm block">Trả trước 50%</span>
+                      <span className="text-xs text-gray-500">50% còn lại thanh toán tại sân</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentPlan('pay_100')}
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
+                        paymentPlan === 'pay_100'
+                          ? 'border-green-500 bg-green-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      {paymentPlan === 'pay_100' && (
+                        <span className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-2xl block mb-1">✅</span>
+                      <span className="font-semibold text-gray-800 text-sm block">Thanh toán 100%</span>
+                      <span className="text-xs text-gray-500">Thanh toán toàn bộ trước</span>
+                    </button>
+                  </div>
+
+                  {/* 7. Payment Gateway */}
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">💳 Phương thức thanh toán</label>
+                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('vnpay')}
@@ -501,9 +526,23 @@ const Booking = () => {
                       <span>{pricePerHour.toLocaleString('vi-VN')}đ/giờ × {selectedDuration === 0.5 ? '0.5 giờ' : `${selectedDuration} giờ`}</span>
                       <span className="font-medium">{totalPrice.toLocaleString('vi-VN')}đ</span>
                     </div>
+                    {paymentPlan === 'pay_50' && (
+                      <>
+                        <div className="flex justify-between text-sm text-blue-600 mb-1.5">
+                          <span>💵 Thanh toán trước (50%)</span>
+                          <span className="font-semibold">{Math.round(totalPrice / 2).toLocaleString('vi-VN')}đ</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-gray-400 mb-1.5">
+                          <span>🏟️ Thanh toán tại sân (50%)</span>
+                          <span>{(totalPrice - Math.round(totalPrice / 2)).toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      </>
+                    )}
                     <div className="border-t border-gray-100 pt-2 mt-2 flex justify-between items-center">
-                      <span className="font-bold text-gray-800">Tổng cộng</span>
-                      <span className="text-2xl font-bold text-blue-700">{totalPrice.toLocaleString('vi-VN')}đ</span>
+                      <span className="font-bold text-gray-800">Thanh toán ngay</span>
+                      <span className="text-2xl font-bold text-blue-700">
+                        {(paymentPlan === 'pay_50' ? Math.round(totalPrice / 2) : totalPrice).toLocaleString('vi-VN')}đ
+                      </span>
                     </div>
                   </div>
                 )}

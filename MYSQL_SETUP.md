@@ -94,7 +94,7 @@ DB_HOST=localhost
 DB_PORT=3306
 DB_NAME=sports_booking
 DB_USER=root
-DB_PASSWORD=your_mysql_password_here
+DB_PASSWORD=root
 
 # Nếu dùng XAMPP, password thường để trống:
 # DB_PASSWORD=

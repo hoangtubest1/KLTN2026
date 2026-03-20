@@ -66,7 +66,7 @@ const Home = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => setUserLocation(null), // denied or error → no distance
+        () => setUserLocation({ lat: 10.7769, lng: 106.7009 }), // fallback: trung tâm TP.HCM
         { timeout: 8000 }
       );
     }
@@ -155,10 +155,10 @@ const Home = () => {
     return (
       <div
         onClick={() => navigate(`/facility/${facility.id}`)}
-        className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer border border-gray-100 hover:border-blue-200 overflow-hidden group"
+        className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer border border-gray-100 hover:border-blue-200 overflow-hidden group h-full flex flex-col"
       >
         {/* Image */}
-        <div className="h-36 bg-gradient-to-br from-green-400 to-emerald-600 relative overflow-hidden">
+        <div className="h-36 bg-gradient-to-br from-green-400 to-emerald-600 relative overflow-hidden flex-shrink-0">
           {facility.image ? (
             <img src={facility.image} alt={facility.name} className="w-full h-full object-cover" />
           ) : (
@@ -177,13 +177,13 @@ const Home = () => {
           </div>
         </div>
         {/* Info */}
-        <div className="p-3">
+        <div className="p-3 flex-1 flex flex-col">
           <h3 className="font-bold text-gray-900 text-sm mb-1 group-hover:text-blue-600 transition-colors truncate">{facility.name}</h3>
           <div className="flex items-center text-xs mb-1.5">
             <i className="mdi mdi-map-marker-outline mr-1" style={{ fontSize: '13px', color: '#e53e3e' }}></i>
             <span className="truncate text-gray-500">{facility.address || 'Hà Nội'}</span>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mt-auto">
             <div className="flex items-center gap-1 text-xs text-gray-500">
               <svg className="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />

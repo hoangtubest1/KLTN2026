@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "TìmSân",
+    "slug": "timsanvn",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#18458B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.timsanvn.app"
+    },
+    "android": {
+      "package": "com.timsanvn.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#18458B",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a93fd5fe-5912-4851-9cb3-80bfbf7cdbcd"
+      }
+    }
+  }
+}

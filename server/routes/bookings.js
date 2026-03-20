@@ -203,6 +203,40 @@ router.post('/', auth, [
   }
 });
 
+// Cancel booking by user (owner of booking)
+router.put('/:id/cancel', auth, async (req, res) => {
+  try {
+    const booking = await Booking.findByPk(req.params.id, {
+      include: [{ model: Sport, as: 'sport' }]
+    });
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy lịch đặt' });
+    }
+
+    // Verify the booking belongs to the current user (by email)
+    if (booking.customerEmail !== req.user.email) {
+      return res.status(403).json({ message: 'Bạn không có quyền hủy lịch đặt này' });
+    }
+
+    // Only allow cancelling pending/pending_payment/confirmed bookings
+    const cancellableStatuses = ['pending', 'pending_payment', 'confirmed'];
+    if (!cancellableStatuses.includes(booking.status)) {
+      return res.status(400).json({ message: `Không thể hủy lịch đặt có trạng thái "${booking.status}"` });
+    }
+
+    await booking.update({ status: 'cancelled' });
+
+    const updatedBooking = await Booking.findByPk(req.params.id, {
+      include: [{ model: Sport, as: 'sport' }]
+    });
+
+    res.json({ message: 'Hủy đặt sân thành công', booking: updatedBooking });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Update booking status
 router.put('/:id/status', auth, admin, async (req, res) => {
   try {

@@ -39,7 +39,8 @@ async function createBookingFromRequest(req, paymentMethod) {
   const {
     sportId, facilityName, facilityAddress, facilityPhone,
     customerName, customerPhone, customerEmail,
-    date, startTime, endTime, duration, totalPrice, notes
+    date, startTime, endTime, duration, totalPrice, notes,
+    paymentPlan, amountToPay
   } = req.body;
 
   // Validate
@@ -53,7 +54,19 @@ async function createBookingFromRequest(req, paymentMethod) {
     throw new Error('Môn thể thao không tồn tại');
   }
 
-  // Check for booking conflicts
+  // Auto-expire: cancel pending_payment bookings older than 15 minutes
+  const expireTime = new Date(Date.now() - 15 * 60 * 1000);
+  await Booking.update(
+    { status: 'cancelled', paymentStatus: 'failed' },
+    {
+      where: {
+        status: 'pending_payment',
+        createdAt: { [Op.lt]: expireTime }
+      }
+    }
+  );
+
+  // Check for booking conflicts (only pending & confirmed block the slot)
   const existingBooking = await Booking.findOne({
     where: {
       sportId,
@@ -89,13 +102,13 @@ async function createBookingFromRequest(req, paymentMethod) {
     duration: duration || 1,
     totalPrice: totalPrice || 0,
     notes,
-    status: 'pending',
+    status: 'pending_payment',
     paymentMethod,
     paymentStatus: 'unpaid',
     vnpayTxnRef: txnRef,
   });
 
-  return { booking, txnRef, totalPrice: totalPrice || 0 };
+  return { booking, txnRef, totalPrice: amountToPay || totalPrice || 0 };
 }
 
 // ============================================================

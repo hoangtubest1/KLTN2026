@@ -21,6 +21,8 @@ import Contact from './pages/Contact';
 import AdminRoute from './components/AdminRoute';
 import ChatBot from './components/ChatBot';
 import PaymentResult from './pages/PaymentResult';
+import InstallPrompt from './components/InstallPrompt';
+import MobileNavBar from './components/MobileNavBar';
 import './App.css';
 
 function AppContent() {
@@ -83,6 +85,8 @@ function AppContent() {
       </main>
       <Footer />
       <ChatBot />
+      <InstallPrompt />
+      <MobileNavBar />
     </div>
   );
 }

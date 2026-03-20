@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
-import logo from '../assets/logopage.jpeg';
+import logo from '../assets/logopage.png';
 
 const Navbar = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -46,15 +46,15 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white border-b-2 border-gray-100 shadow-sm sticky top-0 z-50">
+    <nav className="bg-[#18458B] shadow-lg sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between h-24">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2 flex-shrink-0">
             <img
               src={logo}
-              alt="T&T Sport"
-              className="h-16 w-auto object-contain hover:scale-105 transition-transform duration-300"
+              alt="TÌM SÂN .com"
+              className="h-20 w-auto object-contain hover:scale-105 transition-transform duration-300"
             />
           </Link>
 
@@ -62,7 +62,7 @@ const Navbar = () => {
           <div className="hidden xl:flex items-center space-x-1 flex-1 justify-center">
             <Link
               to="/"
-              className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
+              className="text-white/90 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
             >
               Trang Chủ
             </Link>
@@ -71,7 +71,7 @@ const Navbar = () => {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setIsSportsDropdownOpen(!isSportsDropdownOpen)}
-                className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm whitespace-nowrap flex items-center gap-1"
+                className="text-white/90 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm whitespace-nowrap flex items-center gap-1"
               >
                 Danh Sách Sân Bãi
                 <svg
@@ -123,22 +123,22 @@ const Navbar = () => {
 
             <Link
               to="/owner"
-              className="text-orange-500 hover:text-orange-600 hover:bg-orange-50 px-3 py-2 rounded-lg transition-all duration-300 font-semibold text-sm whitespace-nowrap"
+              className="text-yellow-300 hover:text-yellow-200 hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-semibold text-sm whitespace-nowrap"
             >
               Dành Cho Chủ Sân
             </Link>
-            <Link
-              to="/contact"
-              className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
+            <button
+              onClick={() => document.getElementById('footer-contact')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-white/90 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
             >
               Liên Hệ
-            </Link>
+            </button>
 
             {isAuthenticated && (
               <>
                 <Link
                   to="/bookings"
-                  className="text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm whitespace-nowrap"
+                  className="text-white/90 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm whitespace-nowrap"
                 >
                   Lịch Đã Đặt
                 </Link>
@@ -160,7 +160,7 @@ const Navbar = () => {
               <>
                 <Link
                   to="/profile"
-                  className="flex items-center gap-1.5 text-gray-600 hover:text-blue-600 font-medium text-sm whitespace-nowrap transition-colors duration-200"
+                  className="flex items-center gap-1.5 text-white/90 hover:text-white font-medium text-sm whitespace-nowrap transition-colors duration-200"
                 >
                   <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                     {user?.name?.charAt(0)?.toUpperCase()}
@@ -178,7 +178,7 @@ const Navbar = () => {
               <>
                 <Link
                   to="/login"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
+                  className="text-white/90 hover:text-white hover:bg-white/10 px-3 py-2 rounded-lg transition-all duration-300 font-medium text-sm"
                 >
                   Đăng Nhập
                 </Link>
@@ -195,7 +195,7 @@ const Navbar = () => {
           {/* Mobile Menu Button */}
           <button
             onClick={toggleMobileMenu}
-            className="xl:hidden text-gray-700 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-300"
+            className="xl:hidden text-white p-2 rounded-lg hover:bg-white/10 transition-colors duration-300"
             aria-label="Toggle menu"
           >
             <svg
@@ -280,13 +280,12 @@ const Navbar = () => {
             >
               Dành Cho Chủ Sân
             </Link>
-            <Link
-              to="/contact"
-              onClick={toggleMobileMenu}
-              className="block text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg transition-all duration-300 font-medium"
+            <button
+              onClick={() => { toggleMobileMenu(); document.getElementById('footer-contact')?.scrollIntoView({ behavior: 'smooth' }); }}
+              className="block w-full text-left text-gray-700 hover:text-blue-600 hover:bg-blue-50 px-4 py-3 rounded-lg transition-all duration-300 font-medium"
             >
               Liên Hệ
-            </Link>
+            </button>
 
             {isAuthenticated && (
               <>
