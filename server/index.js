@@ -44,19 +44,29 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/payment', require('./routes/payment'));
 
-// DEBUG - check env vars (DELETE AFTER USE)
+// DEBUG - check env vars and test login (DELETE AFTER USE)
 app.get('/api/debug', async (req, res) => {
   const { User } = require('./models');
-  const userCount = await User.count().catch(() => -1);
-  res.json({
-    JWT_SECRET_SET: !!process.env.JWT_SECRET,
-    JWT_SECRET_LEN: process.env.JWT_SECRET?.length || 0,
-    DB_HOST: process.env.DB_HOST ? 'SET' : 'MISSING',
-    NODE_ENV: process.env.NODE_ENV,
-    USER_COUNT: userCount,
-  });
+  const bcrypt = require('bcryptjs');
+  try {
+    const userCount = await User.count();
+    const user = await User.findOne({ where: { email: 'admin@sports.com' } });
+    let pwMatch = null;
+    if (user) {
+      pwMatch = await bcrypt.compare('admin123', user.password);
+    }
+    res.json({
+      JWT_SECRET_SET: !!process.env.JWT_SECRET,
+      USER_COUNT: userCount,
+      USER_FOUND: !!user,
+      PW_HASH_PREFIX: user?.password?.substring(0, 10),
+      PW_MATCH: pwMatch,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stack: e.stack?.substring(0, 300) });
+  }
 });
-
 
 
 // Database connection
