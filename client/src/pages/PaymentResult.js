@@ -53,7 +53,7 @@ const PaymentResult = () => {
           </h1>
           <p className="text-white/80 text-sm">
             {result.success
-              ? 'Đơn đặt sân của bạn đã được xác nhận'
+              ? 'Đặt sân thành công! Vui lòng chờ xác nhận từ quản trị viên'
               : 'Giao dịch không thành công, vui lòng thử lại'}
           </p>
         </div>
@@ -78,10 +78,10 @@ const PaymentResult = () => {
                 <span className="text-gray-500 text-sm">Trạng thái</span>
                 <span className={`px-3 py-1 rounded-full text-xs font-bold ${
                   result.success
-                    ? 'bg-green-100 text-green-700'
+                    ? 'bg-yellow-100 text-yellow-700'
                     : 'bg-red-100 text-red-700'
                 }`}>
-                  {result.success ? '✅ Đã thanh toán' : '❌ Thất bại'}
+                  {result.success ? '⏳ Chờ xác nhận' : '❌ Thất bại'}
                 </span>
               </div>
               {result.responseCode && (
@@ -94,9 +94,9 @@ const PaymentResult = () => {
           )}
 
           {result.success && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
-              <p className="text-green-800 text-sm font-medium">
-                📧 Email xác nhận đã được gửi đến hộp thư của bạn.
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+              <p className="text-blue-800 text-sm font-medium">
+                📧 Đặt sân thành công! Email thông báo đã được gửi đến hộp thư của bạn. Vui lòng chờ quản trị viên xác nhận.
               </p>
             </div>
           )}

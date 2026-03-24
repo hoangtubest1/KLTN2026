@@ -137,25 +137,23 @@ async function updateBookingAfterPayment(txnRef, success) {
   console.log(`📋 Booking #${booking.id} found: status=${booking.status}, email=${booking.customerEmail}`);
 
   if (success) {
-    await booking.update({ paymentStatus: 'paid', status: 'confirmed' });
-    console.log(`✅ Booking #${booking.id} updated to confirmed/paid`);
+    await booking.update({ paymentStatus: 'paid', status: 'pending' });
+    console.log(`✅ Booking #${booking.id} updated to pending/paid (awaiting admin confirmation)`);
 
-    // Gửi email xác nhận
+    // Gửi email chờ xác nhận
     const populatedBooking = await Booking.findByPk(booking.id, {
       include: [{ model: Sport, as: 'sport' }]
     });
     const bookingData = populatedBooking.toJSON();
-    console.log(`📧 Sending confirmed email to: ${bookingData.customerEmail}`);
-    console.log(`   Sport: ${bookingData.sport?.nameVi || bookingData.sport?.name || 'N/A'}`);
-    console.log(`   Facility: ${bookingData.facilityName}, Date: ${bookingData.date}`);
+    console.log(`📧 Sending pending confirmation email to: ${bookingData.customerEmail}`);
     
     try {
-      const emailResult = await sendConfirmedBookingEmail(bookingData);
+      const emailResult = await sendBookingConfirmationEmail(bookingData);
       console.log('📧 Email result:', JSON.stringify(emailResult));
     } catch (err) {
       console.error('❌ Email sending error:', err.message);
     }
-    console.log(`✅ Booking #${booking.id} paid successfully`);
+    console.log(`✅ Booking #${booking.id} paid successfully, awaiting admin confirmation`);
   } else {
     await booking.update({ paymentStatus: 'failed', status: 'cancelled' });
     console.log(`❌ Booking #${booking.id} payment failed`);
