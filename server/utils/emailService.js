@@ -445,7 +445,7 @@ const sendConfirmedBookingEmail = async (booking) => {
     }
 
     const subject = `🎉 Đặt sân đã được xác nhận - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`;
-    const html = generateConfirmedBookingEmailHTML(booking);
+    const html = generateBookingEmailHTML(booking);
     return await sendEmail(booking.customerEmail, subject, html);
   } catch (error) {
     console.error('❌ Error sending confirmed booking email:', error.message);
