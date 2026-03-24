@@ -445,7 +445,7 @@ const sendConfirmedBookingEmail = async (booking) => {
     }
 
     const subject = `🎉 Đặt sân đã được xác nhận - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`;
-    const html = generateBookingEmailHTML(booking);
+    const html = generateConfirmedBookingEmailHTML(booking);
     return await sendEmail(booking.customerEmail, subject, html);
   } catch (error) {
     console.error('❌ Error sending confirmed booking email:', error.message);
@@ -582,8 +582,196 @@ const sendPasswordResetEmail = async (email, otp) => {
   }
 };
 
+// Generate HTML email template for completed booking
+const generateCompletedBookingEmailHTML = (booking) => {
+  const { customerName, sport, facilityName, date, startTime, endTime, duration, totalPrice } = booking;
+
+  const formattedDate = new Date(date).toLocaleDateString('vi-VN', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
+  return `
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 20px;
+          background-color: #f4f4f4;
+        }
+        .container {
+          background-color: #ffffff;
+          border-radius: 10px;
+          padding: 30px;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #f59e0b 0%, #10b981 100%);
+          color: white;
+          padding: 20px;
+          border-radius: 10px 10px 0 0;
+          text-align: center;
+          margin: -30px -30px 30px -30px;
+        }
+        .header h1 {
+          margin: 0;
+          font-size: 24px;
+        }
+        .status-badge {
+          display: inline-block;
+          background-color: rgba(255,255,255,0.2);
+          padding: 5px 15px;
+          border-radius: 20px;
+          margin-top: 10px;
+          font-size: 14px;
+        }
+        .success-message {
+          background-color: #fef3c7;
+          border-left: 4px solid #f59e0b;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 5px;
+          font-size: 16px;
+        }
+        .booking-details {
+          background-color: #f8f9fa;
+          border-left: 4px solid #f59e0b;
+          padding: 20px;
+          margin: 20px 0;
+          border-radius: 5px;
+        }
+        .detail-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 10px 0;
+          border-bottom: 1px solid #e0e0e0;
+        }
+        .detail-row:last-child {
+          border-bottom: none;
+        }
+        .detail-label {
+          font-weight: bold;
+          color: #f59e0b;
+        }
+        .price-total {
+          background-color: #f59e0b;
+          color: white;
+          padding: 15px;
+          border-radius: 5px;
+          text-align: center;
+          font-size: 20px;
+          font-weight: bold;
+          margin: 20px 0;
+        }
+        .thank-box {
+          background-color: #ecfdf5;
+          border-left: 4px solid #10b981;
+          padding: 15px;
+          margin: 20px 0;
+          border-radius: 5px;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 30px;
+          padding-top: 20px;
+          border-top: 2px solid #e0e0e0;
+          color: #666;
+          font-size: 14px;
+        }
+        .icon {
+          font-size: 48px;
+          margin-bottom: 10px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="icon">🏆</div>
+          <h1>Đặt Sân Đã Hoàn Thành!</h1>
+          <span class="status-badge">Hoàn thành</span>
+        </div>
+        
+        <div class="success-message">
+          🎉 Buổi đặt sân của bạn đã hoàn thành! Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi!
+        </div>
+        
+        <p>Xin chào <strong>${customerName}</strong>,</p>
+        
+        <p>Chúng tôi xin thông báo rằng buổi đặt sân của bạn đã được hoàn thành. Dưới đây là thông tin chi tiết:</p>
+        
+        <div class="booking-details">
+          <div class="detail-row">
+            <span class="detail-label">🏃 Môn thể thao:</span>
+            <span>${sport?.nameVi || sport?.name || 'N/A'}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">🏟️ Sân:</span>
+            <span>${facilityName}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">📅 Ngày:</span>
+            <span>${formattedDate}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">🕐 Giờ:</span>
+            <span>${startTime} - ${endTime}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">⏱️ Thời lượng:</span>
+            <span>${duration} giờ</span>
+          </div>
+        </div>
+        
+        <div class="price-total">
+          💰 Tổng tiền: ${totalPrice?.toLocaleString('vi-VN') || '0'} VNĐ
+        </div>
+        
+        <div class="thank-box">
+          <strong>🙏 Cảm ơn bạn!</strong>
+          <p style="margin: 10px 0 0 0;">Chúng tôi hy vọng bạn đã có trải nghiệm thể thao tuyệt vời. Hẹn gặp lại bạn lần sau!</p>
+          <p style="margin: 5px 0 0 0;">Nếu bạn có góp ý, đừng ngần ngại liên hệ với chúng tôi nhé! ⭐</p>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Sports Booking System</strong></p>
+          <p>Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của chúng tôi! 🏆</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+// Send completed booking email
+const sendCompletedBookingEmail = async (booking) => {
+  try {
+    if (!validateEmailConfig()) {
+      return { success: false, error: 'Email configuration is missing' };
+    }
+
+    const subject = `🏆 Đặt sân hoàn thành - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`;
+    const html = generateCompletedBookingEmailHTML(booking);
+    return await sendEmail(booking.customerEmail, subject, html);
+  } catch (error) {
+    console.error('❌ Error sending completed booking email:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   sendBookingConfirmationEmail,
   sendConfirmedBookingEmail,
+  sendCompletedBookingEmail,
   sendPasswordResetEmail,
 };

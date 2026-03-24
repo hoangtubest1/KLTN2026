@@ -119,6 +119,23 @@ router.put('/bookings/:id/status', auth, admin, async (req, res) => {
         });
     }
 
+    // Send completion email when status is changed to 'completed'
+    if (status === 'completed') {
+      const bookingData = updatedBooking.toJSON();
+      const { sendCompletedBookingEmail } = require('../utils/emailService');
+      sendCompletedBookingEmail(bookingData)
+        .then((result) => {
+          if (result.success) {
+            console.log(`✅ Completion email sent to ${updatedBooking.customerEmail}`);
+          } else {
+            console.error(`⚠️ Failed to send completion email to ${updatedBooking.customerEmail}:`, result.error);
+          }
+        })
+        .catch((error) => {
+          console.error(`⚠️ Completion email sending error for ${updatedBooking.customerEmail}:`, error.message);
+        });
+    }
+
     res.json(updatedBooking);
   } catch (error) {
     res.status(400).json({ message: error.message });
