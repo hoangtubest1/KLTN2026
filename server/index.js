@@ -77,8 +77,12 @@ sequelize.authenticate()
   .then(() => {
     console.log('✅ MySQL connection established successfully');
 
-    // Sử dụng alter: true khi DB_ALTER=true trong .env để tự động thêm columns mới
+    // Chỉ dùng alter: true khi DB_ALTER=true (chạy 1 lần để thêm columns mới, sau đó tắt)
+    // KHÔNG dùng alter: true liên tục vì có thể gây mất data với MySQL ENUM columns
     const syncOptions = process.env.DB_ALTER === 'true' ? { alter: true } : {};
+    if (syncOptions.alter) {
+      console.log('⚠️ Running with ALTER mode - will modify tables to match models');
+    }
     return syncDatabase(syncOptions);
   })
   .catch((err) => {
@@ -88,8 +92,25 @@ sequelize.authenticate()
 
 // Basic route
 app.get('/', (req, res) => {
+  // If client build exists, serve it. Otherwise return API info.
+  const clientBuildPath = path.join(__dirname, '../client/build', 'index.html');
+  if (require('fs').existsSync(clientBuildPath)) {
+    return res.sendFile(clientBuildPath);
+  }
   res.json({ message: 'Sports Booking API is running' });
 });
+
+// Serve React client build (production)
+const clientBuildDir = path.join(__dirname, '../client/build');
+if (require('fs').existsSync(clientBuildDir)) {
+  app.use(express.static(clientBuildDir));
+  
+  // Catch-all: serve React index.html for client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuildDir, 'index.html'));
+  });
+  console.log('📦 Serving React client from:', clientBuildDir);
+}
 
 // Temporary seed endpoint (DELETE AFTER USE)
 app.get('/api/seed', async (req, res) => {

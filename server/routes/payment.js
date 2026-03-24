@@ -88,6 +88,7 @@ async function createBookingFromRequest(req, paymentMethod) {
 
   const txnRef = `${Date.now()}`;
 
+  console.log(`\n🆕 Creating VNPay booking with txnRef: ${txnRef}`);
   const booking = await Booking.create({
     sportId,
     facilityName,
@@ -107,6 +108,11 @@ async function createBookingFromRequest(req, paymentMethod) {
     paymentStatus: 'unpaid',
     vnpayTxnRef: txnRef,
   });
+  console.log(`✅ Booking #${booking.id} created with vnpayTxnRef: ${booking.vnpayTxnRef}`);
+  
+  // Verify it's actually in the DB
+  const verify = await Booking.findOne({ where: { vnpayTxnRef: txnRef } });
+  console.log(`🔍 Verify booking exists in DB: ${verify ? `YES (id=${verify.id})` : 'NO!'}`);
 
   return { booking, txnRef, totalPrice: amountToPay || totalPrice || 0 };
 }
@@ -119,6 +125,13 @@ async function updateBookingAfterPayment(txnRef, success) {
   const booking = await Booking.findOne({ where: { vnpayTxnRef: txnRef } });
   if (!booking) {
     console.log('❌ No booking found for txnRef:', txnRef);
+    // Debug: list all bookings to see what's in the DB
+    const allBookings = await Booking.findAll({ 
+      attributes: ['id', 'vnpayTxnRef', 'status', 'paymentStatus', 'createdAt'],
+      order: [['id', 'DESC']],
+      limit: 5
+    });
+    console.log('📋 Recent bookings in DB:', JSON.stringify(allBookings.map(b => b.toJSON()), null, 2));
     return null;
   }
   console.log(`📋 Booking #${booking.id} found: status=${booking.status}, email=${booking.customerEmail}`);
