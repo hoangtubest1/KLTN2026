@@ -204,18 +204,24 @@ router.post('/forgot-password', [
     } catch (dbError) {
       console.error('❌ Failed to save OTP to database:', dbError.message);
       console.error('   Possible missing columns: resetPasswordOTP, resetPasswordExpires');
-      console.error('   Restart server with DB_ALTER=true to auto-add columns');
       return res.status(500).json({ message: 'Lỗi server. Vui lòng restart server.' });
     }
 
-    // Send email
-    const result = await sendPasswordResetEmail(email, otp);
-    if (!result.success) {
-      console.error('❌ Password reset email failed:', result.error);
-      return res.status(500).json({ message: 'Không thể gửi email. Vui lòng thử lại sau.' });
-    }
-
+    // Respond immediately so the client can show OTP input page
     res.json({ message: 'Mã OTP đã được gửi đến email của bạn' });
+
+    // Send email in background (don't block the response)
+    sendPasswordResetEmail(email, otp)
+      .then(result => {
+        if (result.success) {
+          console.log(`✅ Password reset email sent to ${email}`);
+        } else {
+          console.error(`❌ Password reset email failed for ${email}:`, result.error);
+        }
+      })
+      .catch(err => {
+        console.error(`❌ Password reset email error for ${email}:`, err.message);
+      });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ message: 'Lỗi server' });
