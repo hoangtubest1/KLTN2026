@@ -92,8 +92,12 @@ sequelize.authenticate()
 
 // Basic route
 app.get('/', (req, res) => {
-  // If client build exists, serve it. Otherwise return API info.
+  // Check both possible client build paths
+  const publicPath = path.join(__dirname, 'public', 'index.html');
   const clientBuildPath = path.join(__dirname, '../client/build', 'index.html');
+  if (require('fs').existsSync(publicPath)) {
+    return res.sendFile(publicPath);
+  }
   if (require('fs').existsSync(clientBuildPath)) {
     return res.sendFile(clientBuildPath);
   }
@@ -101,15 +105,19 @@ app.get('/', (req, res) => {
 });
 
 // Serve React client build (production)
+const fs = require('fs');
+const publicDir = path.join(__dirname, 'public');
 const clientBuildDir = path.join(__dirname, '../client/build');
-if (require('fs').existsSync(clientBuildDir)) {
-  app.use(express.static(clientBuildDir));
+const servableDir = fs.existsSync(publicDir) ? publicDir : (fs.existsSync(clientBuildDir) ? clientBuildDir : null);
+
+if (servableDir) {
+  app.use(express.static(servableDir));
   
   // Catch-all: serve React index.html for client-side routing
   app.get('*', (req, res) => {
-    res.sendFile(path.join(clientBuildDir, 'index.html'));
+    res.sendFile(path.join(servableDir, 'index.html'));
   });
-  console.log('📦 Serving React client from:', clientBuildDir);
+  console.log('📦 Serving React client from:', servableDir);
 }
 
 // Temporary seed endpoint (DELETE AFTER USE)
