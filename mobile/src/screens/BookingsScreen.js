@@ -103,6 +103,11 @@ export default function BookingsScreen({ navigation }) {
                                 <Text style={styles.infoIcon}>⏰</Text>
                                 <Text style={styles.infoText}>{item.startTime?.slice(0, 5)} – {item.endTime?.slice(0, 5)}</Text>
                             </View>
+                            {item.createdAt && (
+                                <Text style={styles.createdAt}>
+                                    🕐 Đặt lúc: {new Date(item.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </Text>
+                            )}
                             <View style={styles.cardFooter}>
                                 <Text style={styles.price}>
                                     {Number(item.totalPrice || 0).toLocaleString('vi-VN')}đ
@@ -159,6 +164,7 @@ const styles = StyleSheet.create({
     infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     infoIcon: { fontSize: 14, marginRight: 4 },
     infoText: { fontSize: 13, color: '#374151', marginRight: 12 },
+    createdAt: { fontSize: 11, color: '#9ca3af', marginBottom: 10, fontStyle: 'italic' },
     cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     price: { fontSize: 16, fontWeight: '800', color: '#18458B' },
     cancelBtn: {

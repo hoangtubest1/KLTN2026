@@ -611,8 +611,10 @@ const AdminDashboard = () => {
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Môn Thể Thao</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Sân</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Khách Hàng</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ngày</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ngày
+                        </th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Thời Gian</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Đặt Lúc</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tổng Tiền</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ghi Chú</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Trạng Thái</th>
@@ -637,6 +639,9 @@ const AdminDashboard = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             {booking.startTime} - {booking.endTime}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
+                            {booking.createdAt ? format(new Date(booking.createdAt), 'HH:mm dd/MM/yyyy') : '—'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                             {booking.totalPrice?.toLocaleString('vi-VN')}đ
@@ -1132,22 +1137,20 @@ const AdminDashboard = () => {
                         <button
                           type="button"
                           onClick={() => setApiVersion('v1')}
-                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
-                            apiVersion === 'v1'
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${apiVersion === 'v1'
                               ? 'bg-blue-600 text-white border-blue-600'
                               : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
-                          }`}
+                            }`}
                         >
                           V1 - Trước sáp nhập
                         </button>
                         <button
                           type="button"
                           onClick={() => setApiVersion('v2')}
-                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
-                            apiVersion === 'v2'
+                          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${apiVersion === 'v2'
                               ? 'bg-green-600 text-white border-green-600'
                               : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
-                          }`}
+                            }`}
                         >
                           V2 - Sau sáp nhập 07/2025
                         </button>

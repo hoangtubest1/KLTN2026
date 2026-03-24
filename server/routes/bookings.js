@@ -184,10 +184,13 @@ router.post('/', auth, [
     // Send confirmation email (don't block if email fails)
     // Convert to plain JSON so associations (sport) are accessible in email template
     const bookingData = populatedBooking.toJSON();
+    console.log(`\n📧 Booking #${bookingData.id} created. Sending email to: ${bookingData.customerEmail}`);
+    console.log(`   Sport: ${bookingData.sport?.nameVi || bookingData.sport?.name || 'N/A'}`);
+    console.log(`   Facility: ${bookingData.facilityName}, Date: ${bookingData.date}`);
     sendBookingConfirmationEmail(bookingData)
       .then((result) => {
         if (result.success) {
-          console.log(`✅ Confirmation email sent to ${customerEmail}`);
+          console.log(`✅ Confirmation email sent to ${customerEmail}, messageId: ${result.messageId}`);
         } else {
           console.error(`⚠️ Failed to send email to ${customerEmail}:`, result.error);
         }

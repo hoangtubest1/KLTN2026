@@ -2,8 +2,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// Đổi thành IP máy tính khi test qua LAN
-const API_BASE_URL = 'http://192.168.102.7:5000/api';
+// Production backend trên Railway
+const API_BASE_URL = 'https://kltn2026-production.up.railway.app/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,

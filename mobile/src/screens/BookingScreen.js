@@ -29,7 +29,7 @@ function fmtDisplay(d) {
 
 export default function BookingScreen({ route, navigation }) {
     const { facility } = route.params;
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
 
     const [selectedDate, setSelectedDate] = useState(getDates(14)[0]);
     const [bookedSlots, setBookedSlots] = useState([]);
@@ -85,7 +85,7 @@ export default function BookingScreen({ route, navigation }) {
     const isSelected = (hour) => {
         if (!selectedStart) return false;
         if (!selectedEnd) return hour === selectedStart;
-        return hour >= selectedStart && hour < selectedEnd;
+        return hour >= selectedStart && hour <= selectedEnd;
     };
 
     const calcTotal = () => {
@@ -120,12 +120,26 @@ export default function BookingScreen({ route, navigation }) {
             setSubmitting(true);
             await api.post('/bookings', {
                 facilityId: facility.id,
+                sportId: facility.sportId,
+                facilityName: facility.name,
+                facilityAddress: facility.address || '',
+                facilityPhone: facility.phone || '',
+                customerName: user?.name || 'Khách',
+                customerPhone: user?.phone || '',
+                customerEmail: user?.email || '',
                 date: fmt(selectedDate),
                 startTime: selectedStart,
                 endTime: selectedEnd,
                 totalPrice: calcTotal(),
+                paymentMethod: 'direct',
             });
+            // Reload booked slots so the grid updates immediately
+            await fetchBooked();
+            // Clear selection
+            setSelectedStart(null);
+            setSelectedEnd(null);
             Alert.alert('🎉 Đặt sân thành công!', 'Lịch đặt của bạn đang chờ xác nhận.', [
+                { text: 'OK' },
                 { text: 'Xem lịch đặt', onPress: () => navigation.navigate('Bookings') }
             ]);
         } catch (e) {
@@ -193,9 +207,17 @@ export default function BookingScreen({ route, navigation }) {
                                         ]}
                                         onPress={() => handleSelectSlot(hour)}
                                         disabled={booked}
+                                        activeOpacity={booked ? 1 : 0.7}
                                     >
                                         <Text style={[
                                             styles.slotText,
+                                            booked && styles.slotTextBooked,
+                                            selected && styles.slotTextSelected,
+                                        ]}>
+                                            {booked ? '🔒' : selected ? '✓' : ''}
+                                        </Text>
+                                        <Text style={[
+                                            styles.slotHour,
                                             booked && styles.slotTextBooked,
                                             selected && styles.slotTextSelected,
                                         ]}>
@@ -209,9 +231,18 @@ export default function BookingScreen({ route, navigation }) {
 
                     {/* Legend */}
                     <View style={styles.legend}>
-                        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#d1d5db' }]} /><Text style={styles.legendText}>Trống</Text></View>
-                        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#18458B' }]} /><Text style={styles.legendText}>Đã chọn</Text></View>
-                        <View style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: '#fee2e2' }]} /><Text style={styles.legendText}>Đã đặt</Text></View>
+                        <View style={styles.legendItem}>
+                            <View style={[styles.legendBox, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]} />
+                            <Text style={styles.legendText}>Còn trống</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                            <View style={[styles.legendBox, { backgroundColor: '#18458B', borderColor: '#18458B' }]} />
+                            <Text style={styles.legendText}>Đã chọn</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                            <View style={[styles.legendBox, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]} />
+                            <Text style={styles.legendText}>Đã đặt</Text>
+                        </View>
                     </View>
                 </View>
 
@@ -289,19 +320,23 @@ const styles = StyleSheet.create({
 
     slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     slot: {
-        width: '22%', paddingVertical: 12, borderRadius: 10, alignItems: 'center',
-        backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb',
+        width: '22%', paddingVertical: 10, borderRadius: 10, alignItems: 'center',
+        backgroundColor: '#f0fdf4', borderWidth: 1.5, borderColor: '#86efac',
     },
-    slotBooked: { backgroundColor: '#fee2e2', borderColor: '#fca5a5' },
-    slotSelected: { backgroundColor: '#18458B', borderColor: '#18458B' },
-    slotText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+    slotBooked: { backgroundColor: '#fee2e2', borderColor: '#fca5a5', opacity: 0.85 },
+    slotSelected: {
+        backgroundColor: '#18458B', borderColor: '#0f2d6b', borderWidth: 2,
+        shadowColor: '#18458B', shadowOpacity: 0.4, shadowRadius: 6, elevation: 4,
+    },
+    slotText: { fontSize: 14, marginBottom: 2 },
+    slotHour: { fontSize: 12, fontWeight: '700', color: '#15803d' },
     slotTextBooked: { color: '#ef4444' },
-    slotTextSelected: { color: '#fff' },
+    slotTextSelected: { color: '#fff', fontWeight: '700' },
 
-    legend: { flexDirection: 'row', gap: 16, marginTop: 14 },
-    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    legendDot: { width: 14, height: 14, borderRadius: 7 },
-    legendText: { fontSize: 12, color: '#6b7280' },
+    legend: { flexDirection: 'row', gap: 14, marginTop: 14, flexWrap: 'wrap' },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    legendBox: { width: 22, height: 16, borderRadius: 4, borderWidth: 1.5 },
+    legendText: { fontSize: 12, color: '#374151', fontWeight: '500' },
 
     summary: {
         margin: 16, backgroundColor: '#fff', borderRadius: 16, padding: 16,

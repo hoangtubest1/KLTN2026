@@ -21,6 +21,11 @@ export default function LoginScreen({ navigation }) {
         try {
             setLoading(true);
             await login(email.trim().toLowerCase(), password);
+            // Navigate về Trang Chủ trước, sau đó show thông báo
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+            setTimeout(() => {
+                Alert.alert('✅ Đăng nhập thành công!', 'Chào mừng bạn trở lại!');
+            }, 300);
         } catch (e) {
             Alert.alert('Đăng nhập thất bại', e.response?.data?.message || 'Sai email hoặc mật khẩu');
         } finally {

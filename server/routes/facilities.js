@@ -117,6 +117,49 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get booked slots for a facility on a given date (used by mobile app)
+// GET /api/facilities/:id/booked-slots?date=YYYY-MM-DD
+router.get('/:id/booked-slots', async (req, res) => {
+    try {
+        const { Op } = require('sequelize');
+        const Booking = require('../models/Booking');
+        const { date } = req.query;
+
+        if (!date) {
+            return res.status(400).json({ message: 'date query parameter is required' });
+        }
+
+        // Find the facility to get its name
+        const facility = await Facility.findByPk(req.params.id);
+        if (!facility) {
+            return res.status(404).json({ message: 'Facility not found' });
+        }
+
+        // Query bookings matching this facility name (including sub-courts like "Sân A - Sân 1")
+        const { sequelize: seq } = require('../config/database');
+        const bookings = await Booking.findAll({
+            where: {
+                facilityName: { [Op.like]: `${facility.name}%` },
+                date: seq.where(seq.fn('DATE', seq.col('date')), date),
+                status: { [Op.in]: ['pending', 'confirmed'] },
+            },
+            attributes: ['startTime', 'endTime', 'status', 'customerName', 'facilityName'],
+        });
+
+        // Return array of { startTime, endTime, status } for the mobile app
+        res.json(bookings.map(b => ({
+            startTime: (b.startTime || '').substring(0, 5),
+            endTime: (b.endTime || '').substring(0, 5),
+            status: b.status,
+            customerName: b.customerName,
+            facilityName: b.facilityName,
+        })));
+    } catch (error) {
+        console.error('Error fetching booked slots:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 // Get single facility
 router.get('/:id', async (req, res) => {
     try {

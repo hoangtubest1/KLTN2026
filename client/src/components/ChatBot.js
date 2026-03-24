@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './ChatBot.css';
 
@@ -38,11 +38,6 @@ export default function ChatBot() {
     const inputRef = useRef(null);
     const { user } = useAuth();
 
-    // Drag state
-    const [pos, setPos] = useState({ x: null, y: null }); // null = dùng CSS default
-    const dragRef = useRef({ dragging: false, startX: 0, startY: 0, initX: 0, initY: 0 });
-    const btnRef = useRef(null);
-
     // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -56,60 +51,7 @@ export default function ChatBot() {
         }
     }, [isOpen]);
 
-    // Drag handlers
-    const onDragStart = useCallback((clientX, clientY) => {
-        const btn = btnRef.current;
-        if (!btn) return;
-        const rect = btn.getBoundingClientRect();
-        dragRef.current = {
-            dragging: false,
-            startX: clientX,
-            startY: clientY,
-            initX: rect.left,
-            initY: rect.top,
-        };
-    }, []);
 
-    const onDragMove = useCallback((clientX, clientY) => {
-        const d = dragRef.current;
-        const dx = clientX - d.startX;
-        const dy = clientY - d.startY;
-        if (!d.dragging && Math.hypot(dx, dy) < 5) return;
-        d.dragging = true;
-
-        const btn = btnRef.current;
-        const size = btn ? btn.offsetWidth : 60;
-        const newX = Math.max(8, Math.min(window.innerWidth - size - 8, d.initX + dx));
-        const newY = Math.max(8, Math.min(window.innerHeight - size - 8, d.initY + dy));
-        setPos({ x: newX, y: newY });
-    }, []);
-
-    const onDragEnd = useCallback((e) => {
-        if (!dragRef.current.dragging) {
-            // It's a tap — toggle chat
-            setIsOpen(o => !o);
-        }
-        dragRef.current.dragging = false;
-    }, []);
-
-    // Mouse events
-    const onMouseDown = useCallback((e) => { e.preventDefault(); onDragStart(e.clientX, e.clientY); }, [onDragStart]);
-    const onMouseMove = useCallback((e) => { if (dragRef.current.startX !== 0) onDragMove(e.clientX, e.clientY); }, [onDragMove]);
-    const onMouseUp = useCallback((e) => { onDragEnd(e); dragRef.current.startX = 0; }, [onDragEnd]);
-
-    // Touch events
-    const onTouchStart = useCallback((e) => { const t = e.touches[0]; onDragStart(t.clientX, t.clientY); }, [onDragStart]);
-    const onTouchMove = useCallback((e) => { e.preventDefault(); const t = e.touches[0]; onDragMove(t.clientX, t.clientY); }, [onDragMove]);
-    const onTouchEnd = useCallback((e) => { onDragEnd(e); }, [onDragEnd]);
-
-    useEffect(() => {
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-        return () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-    }, [onMouseMove, onMouseUp]);
 
     const sendMessage = async (text) => {
         const userMessage = text || input.trim();
@@ -165,42 +107,13 @@ export default function ChatBot() {
         setIsOpen(o => !o);
     };
 
-    // Button style: dùng pos state nếu đã kéo, ngược lại dùng CSS fixed
-    const btnStyle = pos.x !== null ? {
-        position: 'fixed',
-        left: pos.x,
-        top: pos.y,
-        right: 'auto',
-        bottom: 'auto',
-        zIndex: 9999,
-        cursor: 'grab',
-        touchAction: 'none',
-    } : {
-        cursor: 'grab',
-        touchAction: 'none',
-    };
-
-    // Chat window bám theo icon
-    const winStyle = pos.x !== null ? {
-        position: 'fixed',
-        left: Math.min(pos.x, window.innerWidth - 340),
-        top: Math.max(8, pos.y - 480),
-        right: 'auto',
-        bottom: 'auto',
-    } : {};
-
     return (
         <>
-            {/* Floating Toggle Button — Draggable */}
+            {/* Floating Toggle Button — Fixed */}
             <button
-                ref={btnRef}
                 className="chatbot-toggle"
-                style={btnStyle}
-                onMouseDown={onMouseDown}
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-                title="Chat với AI tư vấn (giữ để di chuyển)"
+                onClick={handleOpen}
+                title="Chat với AI tư vấn"
                 aria-label="Mở chat AI"
             >
                 {showBadge && !isOpen && <span className="chatbot-badge" />}
@@ -213,7 +126,7 @@ export default function ChatBot() {
 
             {/* Chat Window */}
             {isOpen && (
-                <div className="chatbot-window" style={winStyle}>
+                <div className="chatbot-window">
                     {/* Header */}
                     <div className="chatbot-header">
                         <div className="chatbot-avatar">🤖</div>

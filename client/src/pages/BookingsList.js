@@ -185,11 +185,16 @@ const BookingsList = () => {
                       <div className="flex items-start gap-2.5">
                         <span className="mt-0.5 flex-shrink-0 w-7 h-7 bg-green-50 rounded-lg flex items-center justify-center text-base">🗓️</span>
                         <div>
-                          <p className="text-xs text-gray-400 font-medium">Thời gian</p>
+                          <p className="text-xs text-gray-400 font-medium">Thời gian thi đấu</p>
                           <p className="text-gray-900 font-semibold text-sm">{bookingDate}</p>
                           <p className="text-xs text-gray-500 font-medium">
                             {(booking.startTime || '').slice(0, 5)} – {(booking.endTime || '').slice(0, 5)}
                           </p>
+                          {booking.createdAt && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              🕐 Đặt lúc: {format(new Date(booking.createdAt), 'HH:mm dd/MM/yyyy')}
+                            </p>
+                          )}
                         </div>
                       </div>
 

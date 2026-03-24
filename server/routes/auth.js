@@ -195,14 +195,23 @@ router.post('/forgot-password', [
     const otp = crypto.randomInt(100000, 999999).toString();
 
     // Save OTP and expiry (10 minutes)
-    await user.update({
-      resetPasswordOTP: otp,
-      resetPasswordExpires: new Date(Date.now() + 10 * 60 * 1000)
-    });
+    try {
+      await user.update({
+        resetPasswordOTP: otp,
+        resetPasswordExpires: new Date(Date.now() + 10 * 60 * 1000)
+      });
+      console.log(`🔐 OTP saved for ${email}: ${otp}`);
+    } catch (dbError) {
+      console.error('❌ Failed to save OTP to database:', dbError.message);
+      console.error('   Possible missing columns: resetPasswordOTP, resetPasswordExpires');
+      console.error('   Restart server with DB_ALTER=true to auto-add columns');
+      return res.status(500).json({ message: 'Lỗi server. Vui lòng restart server.' });
+    }
 
     // Send email
     const result = await sendPasswordResetEmail(email, otp);
     if (!result.success) {
+      console.error('❌ Password reset email failed:', result.error);
       return res.status(500).json({ message: 'Không thể gửi email. Vui lòng thử lại sau.' });
     }
 

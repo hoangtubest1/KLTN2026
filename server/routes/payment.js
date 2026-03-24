@@ -6,7 +6,7 @@ const { VNPay, ignoreLogger, ProductCode, VnpLocale, dateFormat } = require('vnp
 const { auth } = require('../middleware/auth');
 const Booking = require('../models/Booking');
 const Sport = require('../models/Sport');
-const { sendBookingConfirmationEmail } = require('../utils/emailService');
+const { sendBookingConfirmationEmail, sendConfirmedBookingEmail } = require('../utils/emailService');
 const { Op } = require('sequelize');
 
 // ============================================================
@@ -115,19 +115,33 @@ async function createBookingFromRequest(req, paymentMethod) {
 // Helper: cập nhật booking sau thanh toán
 // ============================================================
 async function updateBookingAfterPayment(txnRef, success) {
+  console.log(`\n🔍 updateBookingAfterPayment called: txnRef=${txnRef}, success=${success}`);
   const booking = await Booking.findOne({ where: { vnpayTxnRef: txnRef } });
-  if (!booking) return null;
+  if (!booking) {
+    console.log('❌ No booking found for txnRef:', txnRef);
+    return null;
+  }
+  console.log(`📋 Booking #${booking.id} found: status=${booking.status}, email=${booking.customerEmail}`);
 
   if (success) {
     await booking.update({ paymentStatus: 'paid', status: 'confirmed' });
+    console.log(`✅ Booking #${booking.id} updated to confirmed/paid`);
 
     // Gửi email xác nhận
     const populatedBooking = await Booking.findByPk(booking.id, {
       include: [{ model: Sport, as: 'sport' }]
     });
-    sendBookingConfirmationEmail(populatedBooking.toJSON()).catch(err =>
-      console.error('Email error:', err.message)
-    );
+    const bookingData = populatedBooking.toJSON();
+    console.log(`📧 Sending confirmed email to: ${bookingData.customerEmail}`);
+    console.log(`   Sport: ${bookingData.sport?.nameVi || bookingData.sport?.name || 'N/A'}`);
+    console.log(`   Facility: ${bookingData.facilityName}, Date: ${bookingData.date}`);
+    
+    try {
+      const emailResult = await sendConfirmedBookingEmail(bookingData);
+      console.log('📧 Email result:', JSON.stringify(emailResult));
+    } catch (err) {
+      console.error('❌ Email sending error:', err.message);
+    }
     console.log(`✅ Booking #${booking.id} paid successfully`);
   } else {
     await booking.update({ paymentStatus: 'failed', status: 'cancelled' });

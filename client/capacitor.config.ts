@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
     appId: 'com.timsanvn.app',
-    appName: 'TìmSân',
+    appName: 'TìmSân247',
     webDir: 'build',
     server: {
         androidScheme: 'https'

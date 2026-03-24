@@ -1,145 +1,137 @@
-/* ============================================================
-   Service Worker for TìmSân PWA
-   - Caches static assets (App Shell)
-   - Network-first for API calls
-   - Cache-first for static files (images, fonts, JS, CSS)
-   ============================================================ */
+/*
+  Service Worker for CRA-based PWA
+  - Precache minimal shell
+  - Network-first for API and HTML navigation
+  - Stale-while-revalidate for static assets
+*/
 
-const CACHE_NAME = 'timsanvn-v1';
-const APP_SHELL = [
-    '/',
-    '/index.html',
-    '/static/js/bundle.js',
-    '/manifest.json',
+const SW_VERSION = 'v2';
+const STATIC_CACHE = `timsan-static-${SW_VERSION}`;
+const RUNTIME_CACHE = `timsan-runtime-${SW_VERSION}`;
+
+const PRECACHE_URLS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icons/72.png',
+  '/icons/192.png',
 ];
 
-// ── Install: pre-cache app shell ──────────────────────────────
 self.addEventListener('install', (event) => {
-    console.log('[SW] Installing...');
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            console.log('[SW] Pre-caching App Shell');
-            return cache.addAll(APP_SHELL).catch((err) => {
-                console.warn('[SW] Some App Shell resources failed to cache:', err);
-            });
-        })
-    );
-    self.skipWaiting();
+  event.waitUntil(
+    caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => undefined))
+  );
+  self.skipWaiting();
 });
 
-// ── Activate: remove old caches ───────────────────────────────
 self.addEventListener('activate', (event) => {
-    console.log('[SW] Activating...');
-    event.waitUntil(
-        caches.keys().then((cacheNames) =>
-            Promise.all(
-                cacheNames
-                    .filter((name) => name !== CACHE_NAME)
-                    .map((name) => {
-                        console.log('[SW] Deleting old cache:', name);
-                        return caches.delete(name);
-                    })
-            )
-        )
-    );
-    self.clients.claim();
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter((key) => key !== STATIC_CACHE && key !== RUNTIME_CACHE)
+          .map((key) => caches.delete(key))
+      )
+    )
+  );
+  self.clients.claim();
 });
 
-// ── Fetch: strategy per request type ─────────────────────────
+const isHtmlNavigation = (request) => request.mode === 'navigate';
+
+const isApiRequest = (url) => {
+  if (url.pathname.startsWith('/api/')) return true;
+  if (url.origin !== self.location.origin && url.pathname.includes('/api/')) return true;
+  return false;
+};
+
+const isStaticAsset = (request, url) => {
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname.startsWith('/static/')) return true;
+  return ['script', 'style', 'image', 'font', 'worker'].includes(request.destination);
+};
+
+async function networkFirst(request, cacheName, fallbackResponse) {
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+    return cached || fallbackResponse;
+  }
+}
+
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  const cached = await cache.match(request);
+
+  const networkPromise = fetch(request)
+    .then((response) => {
+      if (response && response.ok) {
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => undefined);
+
+  return cached || networkPromise;
+}
+
 self.addEventListener('fetch', (event) => {
-    const { request } = event;
-    const url = new URL(request.url);
+  const { request } = event;
+  if (request.method !== 'GET') return;
 
-    // Skip non-GET requests
-    if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.protocol === 'chrome-extension:') return;
 
-    // Skip Chrome extension requests
-    if (url.protocol === 'chrome-extension:') return;
-
-    // ── API calls → Network First (always fresh data) ──────────
-    if (url.pathname.startsWith('/api/') || url.port === '5000') {
-        event.respondWith(
-            fetch(request)
-                .then((response) => response)
-                .catch(() => {
-                    // Offline fallback for API
-                    return new Response(
-                        JSON.stringify({ error: 'Bạn đang offline. Vui lòng kiểm tra kết nối.' }),
-                        { headers: { 'Content-Type': 'application/json' } }
-                    );
-                })
-        );
-        return;
-    }
-
-    // ── Google Fonts → Cache First ─────────────────────────────
-    if (url.origin === 'https://fonts.googleapis.com' ||
-        url.origin === 'https://fonts.gstatic.com') {
-        event.respondWith(
-            caches.match(request).then((cached) => {
-                if (cached) return cached;
-                return fetch(request).then((response) => {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-                    return response;
-                });
-            })
-        );
-        return;
-    }
-
-    // ── Static Assets (JS, CSS, images) → Cache First ──────────
-    if (
-        url.pathname.startsWith('/static/') ||
-        url.pathname.match(/\.(png|jpg|jpeg|svg|ico|webp|woff2?|ttf)$/)
-    ) {
-        event.respondWith(
-            caches.match(request).then((cached) => {
-                if (cached) return cached;
-                return fetch(request).then((response) => {
-                    if (!response || response.status !== 200) return response;
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-                    return response;
-                });
-            })
-        );
-        return;
-    }
-
-    // ── HTML Navigation → Network First, fallback to index.html ─
-    if (request.headers.get('accept')?.includes('text/html')) {
-        event.respondWith(
-            fetch(request).catch(() => caches.match('/index.html'))
-        );
-        return;
-    }
-});
-
-// ── Background Sync (future use) ─────────────────────────────
-self.addEventListener('sync', (event) => {
-    console.log('[SW] Background sync:', event.tag);
-});
-
-// ── Push Notifications (future use) ──────────────────────────
-self.addEventListener('push', (event) => {
-    if (!event.data) return;
-    const data = event.data.json();
-    const options = {
-        body: data.body || 'Có thông báo mới từ TìmSân',
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-72x72.png',
-        vibrate: [200, 100, 200],
-        data: { url: data.url || '/' },
-    };
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'TìmSân', options)
+  if (isApiRequest(url)) {
+    event.respondWith(
+      networkFirst(
+        request,
+        RUNTIME_CACHE,
+        new Response(
+          JSON.stringify({ error: 'Bạn đang offline. Vui lòng kiểm tra kết nối.' }),
+          { headers: { 'Content-Type': 'application/json' }, status: 503 }
+        )
+      )
     );
+    return;
+  }
+
+  if (isHtmlNavigation(request)) {
+    event.respondWith(
+      networkFirst(request, RUNTIME_CACHE, caches.match('/index.html'))
+    );
+    return;
+  }
+
+  if (isStaticAsset(request, url)) {
+    event.respondWith(staleWhileRevalidate(request, RUNTIME_CACHE));
+  }
+});
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  const data = event.data.json();
+  const options = {
+    body: data.body || 'Có thông báo mới từ TìmSân',
+    icon: '/icons/192.png',
+    badge: '/icons/72.png',
+    vibrate: [200, 100, 200],
+    data: { url: data.url || '/' },
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'TìmSân', options)
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-    event.waitUntil(
-        clients.openWindow(event.notification.data?.url || '/')
-    );
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data?.url || '/'));
 });

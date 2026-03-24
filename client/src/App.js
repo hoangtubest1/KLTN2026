@@ -18,6 +18,7 @@ import Profile from './pages/Profile';
 import Statistics from './pages/Statistics';
 import NotFound from './pages/NotFound';
 import Contact from './pages/Contact';
+import OwnerLanding from './pages/OwnerLanding';
 import AdminRoute from './components/AdminRoute';
 import ChatBot from './components/ChatBot';
 import PaymentResult from './pages/PaymentResult';
@@ -79,6 +80,7 @@ function AppContent() {
             }
           />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/owner" element={<OwnerLanding />} />
           <Route path="/payment/result" element={<PaymentResult />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

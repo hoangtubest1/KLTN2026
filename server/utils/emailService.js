@@ -1,11 +1,22 @@
 const nodemailer = require('nodemailer');
 
+// Validate email configuration at startup
+const validateEmailConfig = () => {
+  const required = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM'];
+  const missing = required.filter(key => !process.env[key]);
+  if (missing.length > 0) {
+    console.warn(`⚠️ Email config missing: ${missing.join(', ')}. Emails will not be sent.`);
+    return false;
+  }
+  return true;
+};
+
 // Create transporter with Gmail configuration
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: false, // true for 465, false for other ports
+    port: parseInt(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_PORT === '465', // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,
@@ -365,6 +376,10 @@ const generateConfirmedBookingEmailHTML = (booking) => {
 // Send booking confirmation email
 const sendBookingConfirmationEmail = async (booking) => {
   try {
+    if (!validateEmailConfig()) {
+      return { success: false, error: 'Email configuration is missing' };
+    }
+
     const transporter = createTransporter();
 
     const mailOptions = {
@@ -374,11 +389,13 @@ const sendBookingConfirmationEmail = async (booking) => {
       html: generateBookingEmailHTML(booking),
     };
 
+    console.log(`📧 Sending booking email to: ${booking.customerEmail} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Email sent successfully:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending email:', error.message);
+    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
     return { success: false, error: error.message };
   }
 };
@@ -386,6 +403,10 @@ const sendBookingConfirmationEmail = async (booking) => {
 // Send confirmed booking email
 const sendConfirmedBookingEmail = async (booking) => {
   try {
+    if (!validateEmailConfig()) {
+      return { success: false, error: 'Email configuration is missing' };
+    }
+
     const transporter = createTransporter();
 
     const mailOptions = {
@@ -395,11 +416,13 @@ const sendConfirmedBookingEmail = async (booking) => {
       html: generateConfirmedBookingEmailHTML(booking),
     };
 
+    console.log(`📧 Sending confirmed booking email to: ${booking.customerEmail} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Confirmed booking email sent successfully:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending confirmed booking email:', error.message);
+    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
     return { success: false, error: error.message };
   }
 };
@@ -520,6 +543,10 @@ const generatePasswordResetEmailHTML = (otp) => {
 // Send password reset OTP email
 const sendPasswordResetEmail = async (email, otp) => {
   try {
+    if (!validateEmailConfig()) {
+      return { success: false, error: 'Email configuration is missing' };
+    }
+
     const transporter = createTransporter();
 
     const mailOptions = {
@@ -529,11 +556,13 @@ const sendPasswordResetEmail = async (email, otp) => {
       html: generatePasswordResetEmailHTML(otp),
     };
 
+    console.log(`📧 Sending password reset email to: ${email} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Password reset email sent successfully:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending password reset email:', error.message);
+    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
     return { success: false, error: error.message };
   }
 };
