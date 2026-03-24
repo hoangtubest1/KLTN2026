@@ -2,6 +2,10 @@ const nodemailer = require('nodemailer');
 
 // Validate email configuration at startup
 const validateEmailConfig = () => {
+  // If Resend API key is set, we don't need SMTP config
+  if (process.env.RESEND_API_KEY) {
+    return true;
+  }
   const required = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM'];
   const missing = required.filter(key => !process.env[key]);
   if (missing.length > 0) {
@@ -11,7 +15,7 @@ const validateEmailConfig = () => {
   return true;
 };
 
-// Create transporter with Gmail configuration
+// Create transporter with Gmail configuration (for localhost/SMTP)
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
@@ -22,6 +26,50 @@ const createTransporter = () => {
       pass: process.env.EMAIL_PASSWORD,
     },
   });
+};
+
+// Send email via Resend HTTP API (for production/Railway)
+const sendViaResend = async (to, subject, html) => {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.RESEND_FROM || 'Sports Booking <onboarding@resend.dev>',
+      to: [to],
+      subject: subject,
+      html: html,
+    }),
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`Resend API error: ${JSON.stringify(data)}`);
+  }
+  return data;
+};
+
+// Unified email sender - uses Resend API if available, otherwise SMTP
+const sendEmail = async (to, subject, html) => {
+  if (process.env.RESEND_API_KEY) {
+    console.log(`📧 Sending email via Resend API to: ${to}`);
+    const result = await sendViaResend(to, subject, html);
+    console.log(`✅ Email sent via Resend:`, result.id);
+    return { success: true, messageId: result.id };
+  } else {
+    const transporter = createTransporter();
+    console.log(`📧 Sending email via SMTP to: ${to} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
+    const info = await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to: to,
+      subject: subject,
+      html: html,
+    });
+    console.log('✅ Email sent via SMTP:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  }
 };
 
 // Generate HTML email template for booking confirmation (pending status)
@@ -380,22 +428,11 @@ const sendBookingConfirmationEmail = async (booking) => {
       return { success: false, error: 'Email configuration is missing' };
     }
 
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM,
-      to: booking.customerEmail,
-      subject: `✅ Xác nhận đặt sân - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
-      html: generateBookingEmailHTML(booking),
-    };
-
-    console.log(`📧 Sending booking email to: ${booking.customerEmail} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const subject = `✅ Xác nhận đặt sân - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`;
+    const html = generateBookingEmailHTML(booking);
+    return await sendEmail(booking.customerEmail, subject, html);
   } catch (error) {
-    console.error('❌ Error sending email:', error.message);
-    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
+    console.error('❌ Error sending booking email:', error.message);
     return { success: false, error: error.message };
   }
 };
@@ -407,22 +444,11 @@ const sendConfirmedBookingEmail = async (booking) => {
       return { success: false, error: 'Email configuration is missing' };
     }
 
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM,
-      to: booking.customerEmail,
-      subject: `🎉 Đặt sân đã được xác nhận - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`,
-      html: generateConfirmedBookingEmailHTML(booking),
-    };
-
-    console.log(`📧 Sending confirmed booking email to: ${booking.customerEmail} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Confirmed booking email sent successfully:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const subject = `🎉 Đặt sân đã được xác nhận - ${booking.sport?.nameVi || booking.sport?.name || ''} - ${new Date(booking.date).toLocaleDateString('vi-VN')}`;
+    const html = generateConfirmedBookingEmailHTML(booking);
+    return await sendEmail(booking.customerEmail, subject, html);
   } catch (error) {
     console.error('❌ Error sending confirmed booking email:', error.message);
-    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
     return { success: false, error: error.message };
   }
 };
@@ -547,22 +573,11 @@ const sendPasswordResetEmail = async (email, otp) => {
       return { success: false, error: 'Email configuration is missing' };
     }
 
-    const transporter = createTransporter();
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM,
-      to: email,
-      subject: `🔐 Mã đặt lại mật khẩu - Sports Booking`,
-      html: generatePasswordResetEmailHTML(otp),
-    };
-
-    console.log(`📧 Sending password reset email to: ${email} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
-    const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Password reset email sent successfully:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    const subject = `🔐 Mã đặt lại mật khẩu - Sports Booking`;
+    const html = generatePasswordResetEmailHTML(otp);
+    return await sendEmail(email, subject, html);
   } catch (error) {
     console.error('❌ Error sending password reset email:', error.message);
-    console.error('   SMTP Config:', { host: process.env.EMAIL_HOST, port: process.env.EMAIL_PORT, user: process.env.EMAIL_USER });
     return { success: false, error: error.message };
   }
 };
