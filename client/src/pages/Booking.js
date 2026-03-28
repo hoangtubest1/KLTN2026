@@ -419,11 +419,10 @@ const Booking = () => {
                     <button
                       type="button"
                       onClick={() => setPaymentPlan('pay_50')}
-                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                        paymentPlan === 'pay_50'
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentPlan === 'pay_50'
                           ? 'border-blue-500 bg-blue-50 shadow-md'
                           : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {paymentPlan === 'pay_50' && (
                         <span className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
@@ -439,11 +438,10 @@ const Booking = () => {
                     <button
                       type="button"
                       onClick={() => setPaymentPlan('pay_100')}
-                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                        paymentPlan === 'pay_100'
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentPlan === 'pay_100'
                           ? 'border-green-500 bg-green-50 shadow-md'
                           : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {paymentPlan === 'pay_100' && (
                         <span className="absolute top-2 right-2 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -464,11 +462,10 @@ const Booking = () => {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('vnpay')}
-                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                        paymentMethod === 'vnpay'
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentMethod === 'vnpay'
                           ? 'border-blue-500 bg-blue-50 shadow-md'
                           : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {paymentMethod === 'vnpay' && (
                         <span className="absolute top-2 right-2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
@@ -484,11 +481,10 @@ const Booking = () => {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('momo')}
-                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${
-                        paymentMethod === 'momo'
+                      className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentMethod === 'momo'
                           ? 'border-pink-500 bg-pink-50 shadow-md'
                           : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {paymentMethod === 'momo' && (
                         <span className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
@@ -601,15 +597,15 @@ const Booking = () => {
                     let cls = 'relative rounded-xl border-2 py-3 text-center text-sm font-bold transition-all select-none ';
                     let icon = null;
 
-                    if (sel && !past) {
-                      cls += 'bg-indigo-500 border-indigo-500 text-white shadow-md';
-                    } else if (booking) {
+                    if (booking) {
                       if (booking.status === 'confirmed') {
                         cls += 'bg-pink-50 border-pink-300 text-pink-700';
                       } else {
                         cls += 'bg-yellow-50 border-yellow-300 text-yellow-700';
                       }
                       icon = <span className="absolute top-0.5 right-1 text-[10px]">📌</span>;
+                    } else if (sel && !past) {
+                      cls += 'bg-indigo-500 border-indigo-500 text-white shadow-md';
                     } else if (past) {
                       cls += 'bg-gray-50 border-gray-200 text-gray-300';
                     } else {
