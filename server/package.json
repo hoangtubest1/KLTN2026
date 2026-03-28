@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "build": "cd ../client && npm install && npm run build && xcopy /E /Y /I build ..\\server\\public\\ || (cp -r build ../server/public/ && echo 'Copied')"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
