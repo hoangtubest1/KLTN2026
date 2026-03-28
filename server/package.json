@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "cd ../client && npm install && npm run build && cp -r build/* ../server/public/"
+    "build:local": "cd ../client && npm install && npm run build && cp -r build/* ../server/public/"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
