@@ -16,6 +16,7 @@ const STATUS_COLOR = {
 export default function BookingsScreen({ navigation }) {
     const { isAuthenticated } = useAuth();
     const [bookings, setBookings] = useState([]);
+    const [reviewedFacilityIds, setReviewedFacilityIds] = useState(new Set());
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -23,17 +24,44 @@ export default function BookingsScreen({ navigation }) {
         fetchBookings();
     }, [isAuthenticated]);
 
+    // Refresh khi quay lại màn hình (sau khi đánh giá xong)
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            if (isAuthenticated) fetchBookings();
+        });
+        return unsubscribe;
+    }, [navigation, isAuthenticated]);
+
     const fetchBookings = async () => {
         try {
             setLoading(true);
             const res = await api.get('/bookings');
             setBookings(res.data);
+
+            // Lấy danh sách các facilityId mà user đã review
+            // Dùng endpoint GET /reviews/facility/:id sẽ tốn nhiều request
+            // Nên dùng endpoint my-reviews nếu có, hoặc check từng sân completed
+            const completedBookings = res.data.filter(b => b.status === 'completed' && b.facilityId);
+            if (completedBookings.length > 0) {
+                const uniqueFacilityIds = [...new Set(completedBookings.map(b => b.facilityId))];
+                const results = await Promise.allSettled(
+                    uniqueFacilityIds.map(fId => api.get(`/reviews/can-review/${fId}`))
+                );
+                const reviewed = new Set();
+                results.forEach((r, idx) => {
+                    if (r.status === 'fulfilled' && r.value.data.reason === 'already_reviewed') {
+                        reviewed.add(uniqueFacilityIds[idx]);
+                    }
+                });
+                setReviewedFacilityIds(reviewed);
+            }
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
     };
+
 
     const handleCancel = (bookingId) => {
         Alert.alert('Hủy đặt sân', 'Bạn có chắc muốn hủy lịch này?', [

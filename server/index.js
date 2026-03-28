@@ -43,6 +43,7 @@ app.use('/api/stats', require('./routes/stats'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/payment', require('./routes/payment'));
+app.use('/api/news', require('./routes/news'));
 
 // DEBUG - check env vars and test login (DELETE AFTER USE)
 app.get('/api/debug', async (req, res) => {
@@ -112,7 +113,7 @@ const servableDir = fs.existsSync(publicDir) ? publicDir : (fs.existsSync(client
 
 if (servableDir) {
   app.use(express.static(servableDir));
-  
+
   // Catch-all: serve React index.html for client-side routing
   app.get('*', (req, res) => {
     res.sendFile(path.join(servableDir, 'index.html'));
@@ -124,7 +125,7 @@ if (servableDir) {
 app.get('/api/seed', async (req, res) => {
   try {
     const { Sport, Facility, User } = require('./models');
-    
+
     // Check if already seeded
     const sportCount = await Sport.count();
     if (sportCount > 0) {
@@ -186,11 +187,11 @@ app.get('/api/seed', async (req, res) => {
     await User.create({ name: 'Admin', email: 'admin@sports.com', phone: '0900000000', password: 'admin123', role: 'admin' });
     await User.create({ name: 'Nguyễn Văn A', email: 'user@sports.com', phone: '0911111111', password: 'user123', role: 'user' });
 
-    res.json({ 
-      message: '🎉 Seed completed!', 
-      sports: sports.length, 
-      facilities: totalFacilities, 
-      users: 2 
+    res.json({
+      message: '🎉 Seed completed!',
+      sports: sports.length,
+      facilities: totalFacilities,
+      users: 2
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -184,7 +184,10 @@ const Navbar = () => {
                 </Link>
                 <Link
                   to="/register"
-                  className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-2 rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-300 font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm"
+                  className="text-white px-4 py-2 rounded-lg transition-all duration-300 font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 text-sm"
+                  style={{ background: '#20B349' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#18973c'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#20B349'}
                 >
                   Đăng Ký
                 </Link>
@@ -337,7 +340,8 @@ const Navbar = () => {
                   <Link
                     to="/register"
                     onClick={toggleMobileMenu}
-                    className="block bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-4 py-3 rounded-lg hover:from-purple-600 hover:to-indigo-700 transition-all duration-300 font-semibold shadow-md text-center"
+                    className="block text-white px-4 py-3 rounded-lg transition-all duration-300 font-semibold shadow-md text-center"
+                    style={{ background: '#20B349' }}
                   >
                     Đăng Ký
                   </Link>

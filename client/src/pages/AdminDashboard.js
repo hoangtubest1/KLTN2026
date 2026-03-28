@@ -86,6 +86,13 @@ const AdminDashboard = () => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // News management state
+  const [newsList, setNewsList] = useState([]);
+  const [showNewsModal, setShowNewsModal] = useState(false);
+  const [editingNews, setEditingNews] = useState(null);
+  const [uploadingNewsImage, setUploadingNewsImage] = useState(false);
+  const [newsForm, setNewsForm] = useState({ title: '', summary: '', content: '', image: '' });
+
   // Vietnam address API state
   const [apiVersion, setApiVersion] = useState('v1');
   const [provinces, setProvinces] = useState([]);
@@ -113,6 +120,8 @@ const AdminDashboard = () => {
       fetchUserData();
     } else if (activeTab === 'facilities') {
       fetchFacilityData();
+    } else if (activeTab === 'news') {
+      fetchNewsData();
     }
   }, [isAuthenticated, user, filters, activeTab]);
 
@@ -450,16 +459,77 @@ const AdminDashboard = () => {
     try {
       const formData = new FormData();
       formData.append('image', file);
-      const res = await api.post('/upload/image', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
+      const res = await api.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setFacilityForm(prev => ({ ...prev, image: res.data.url }));
     } catch (err) {
       alert('Upload ảnh thất bại: ' + (err.response?.data?.message || err.message));
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // ---- News handlers ----
+  const fetchNewsData = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/news');
+      setNewsList(Array.isArray(res.data) ? res.data : []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching news:', err);
+      setLoading(false);
+    }
+  };
+
+  const handleAddNews = () => {
+    setEditingNews(null);
+    setNewsForm({ title: '', summary: '', content: '', image: '' });
+    setShowNewsModal(true);
+  };
+
+  const handleEditNews = (item) => {
+    setEditingNews(item);
+    setNewsForm({ title: item.title || '', summary: item.summary || '', content: item.content || '', image: item.image || '' });
+    setShowNewsModal(true);
+  };
+
+  const handleSaveNews = async () => {
+    if (!newsForm.title.trim()) { alert('Tiêu đề không được để trống'); return; }
+    try {
+      if (editingNews) {
+        await api.put(`/news/${editingNews.id}`, newsForm);
+      } else {
+        await api.post('/news', newsForm);
+      }
+      setShowNewsModal(false);
+      fetchNewsData();
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDeleteNews = async (id) => {
+    if (!window.confirm('Xóa bài viết này?')) return;
+    try {
+      await api.delete(`/news/${id}`);
+      fetchNewsData();
+    } catch (err) {
+      alert('Lỗi khi xóa: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleNewsImageUpload = async (file) => {
+    if (!file) return;
+    setUploadingNewsImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await api.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setNewsForm(prev => ({ ...prev, image: res.data.url }));
+    } catch (err) {
+      alert('Upload ảnh thất bại: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUploadingNewsImage(false);
     }
   };
 
@@ -500,6 +570,15 @@ const AdminDashboard = () => {
               }`}
           >
             👥 Quản Lý Người Dùng
+          </button>
+          <button
+            onClick={() => setActiveTab('news')}
+            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'news'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100'
+              }`}
+          >
+            📰 Quản Lý Tin Tức
           </button>
           <button
             onClick={() => navigate('/statistics')}
@@ -1138,8 +1217,8 @@ const AdminDashboard = () => {
                           type="button"
                           onClick={() => setApiVersion('v1')}
                           className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${apiVersion === 'v1'
-                              ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
                             }`}
                         >
                           V1 - Trước sáp nhập
@@ -1148,8 +1227,8 @@ const AdminDashboard = () => {
                           type="button"
                           onClick={() => setApiVersion('v2')}
                           className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${apiVersion === 'v2'
-                              ? 'bg-green-600 text-white border-green-600'
-                              : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
+                            ? 'bg-green-600 text-white border-green-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
                             }`}
                         >
                           V2 - Sau sáp nhập 07/2025
@@ -1434,6 +1513,169 @@ const AdminDashboard = () => {
           </>
         )}
       </div>
+
+      {/* News Management Tab */}
+      {activeTab === 'news' && (
+        <>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Quản Lý Tin Tức & Sự Kiện</h2>
+              <p className="text-sm text-gray-500 mt-0.5">Tạo và quản lý các bài viết hiển thị trên trang chủ</p>
+            </div>
+            <button
+              onClick={handleAddNews}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+            >
+              <span className="text-lg leading-none">+</span> Thêm bài viết
+            </button>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            {newsList.length === 0 ? (
+              <div className="p-16 text-center text-gray-400">
+                <div className="text-5xl mb-4">📰</div>
+                <p className="text-lg font-medium">Chưa có bài viết nào</p>
+                <p className="text-sm mt-1">Nhấn "Thêm bài viết" để tạo bài đầu tiên</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-16">Ảnh</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tiêu đề</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Tóm tắt</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-36">Ngày đăng</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase w-28">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {newsList.map(item => (
+                      <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3">
+                          {item.image ? (
+                            <img src={item.image} alt={item.title} className="w-14 h-10 object-cover rounded-lg" />
+                          ) : (
+                            <div className="w-14 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xl">📰</div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-gray-900 text-sm line-clamp-2">{item.title}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 max-w-xs">
+                          <p className="line-clamp-2">{item.summary || '—'}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
+                          {item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('vi-VN') : '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditNews(item)}
+                              className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                            >Sửa</button>
+                            <button
+                              onClick={() => handleDeleteNews(item.id)}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors"
+                            >Xóa</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* News Modal */}
+          {showNewsModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowNewsModal(false)}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                {/* Modal Header */}
+                <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+                  <h3 className="text-white font-bold text-lg">{editingNews ? 'Sửa bài viết' : 'Thêm bài viết mới'}</h3>
+                  <button onClick={() => setShowNewsModal(false)} className="text-white hover:text-green-200 text-2xl leading-none">×</button>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  {/* Image */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Ảnh bìa</label>
+                    {newsForm.image && (
+                      <img src={newsForm.image} alt="preview" className="w-full h-40 object-cover rounded-lg mb-2" />
+                    )}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="text"
+                        placeholder="URL ảnh..."
+                        value={newsForm.image}
+                        onChange={e => setNewsForm(p => ({ ...p, image: e.target.value }))}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      />
+                      <label className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                        {uploadingNewsImage ? 'Đang tải...' : '📁 Upload'}
+                        <input type="file" accept="image/*" className="hidden" onChange={e => handleNewsImageUpload(e.target.files[0])} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tiêu đề <span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="Nhập tiêu đề bài viết..."
+                      value={newsForm.title}
+                      onChange={e => setNewsForm(p => ({ ...p, title: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Summary */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Tóm tắt</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Mô tả ngắn gọn về bài viết..."
+                      value={newsForm.summary}
+                      onChange={e => setNewsForm(p => ({ ...p, summary: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                    />
+                  </div>
+
+                  {/* Content */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Nội dung</label>
+                    <textarea
+                      rows={8}
+                      placeholder="Nhập nội dung bài viết..."
+                      value={newsForm.content}
+                      onChange={e => setNewsForm(p => ({ ...p, content: e.target.value }))}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent resize-y"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={handleSaveNews}
+                      className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 rounded-lg font-semibold transition-all"
+                    >
+                      {editingNews ? 'Cập nhật' : 'Đăng bài'}
+                    </button>
+                    <button
+                      onClick={() => setShowNewsModal(false)}
+                      className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition-all"
+                    >
+                      Hủy
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

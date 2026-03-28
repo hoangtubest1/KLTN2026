@@ -6,6 +6,7 @@ const Sport = require('./Sport');
 const Facility = require('./Facility');
 const Booking = require('./Booking');
 const Review = require('./Review');
+const News = require('./News');
 
 // ============================================
 // DEFINE RELATIONSHIPS (ASSOCIATIONS)
@@ -77,5 +78,6 @@ module.exports = {
     Facility,
     Booking,
     Review,
+    News,
     syncDatabase
 };

@@ -22,7 +22,7 @@ import OwnerLanding from './pages/OwnerLanding';
 import AdminRoute from './components/AdminRoute';
 import ChatBot from './components/ChatBot';
 import PaymentResult from './pages/PaymentResult';
-import InstallPrompt from './components/InstallPrompt';
+// import InstallPrompt from './components/InstallPrompt';
 import MobileNavBar from './components/MobileNavBar';
 import './App.css';
 
@@ -87,7 +87,7 @@ function AppContent() {
       </main>
       <Footer />
       <ChatBot />
-      <InstallPrompt />
+      {/* <InstallPrompt /> */}
       <MobileNavBar />
     </div>
   );

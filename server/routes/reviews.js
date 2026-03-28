@@ -1,7 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const { Review, User, Facility } = require('../models');
+const Booking = require('../models/Booking');
 const { auth } = require('../middleware/auth');
+
+// GET - Lấy tất cả review (public, dùng cho trang chủ)
+router.get('/all', async (req, res) => {
+    try {
+        const reviews = await Review.findAll({
+            include: [
+                { model: User, as: 'user', attributes: ['id', 'name', 'email'] },
+                { model: Facility, as: 'facility', attributes: ['id', 'name'] }
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 20
+        });
+        res.json(reviews);
+    } catch (error) {
+        console.error('Error fetching all reviews:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
 
 // GET - Lấy tất cả review của 1 sân (public)
 router.get('/facility/:facilityId', async (req, res) => {
@@ -28,6 +47,40 @@ router.get('/facility/:facilityId', async (req, res) => {
     }
 });
 
+// GET - Kiểm tra user có thể đánh giá sân không (yêu cầu đăng nhập)
+router.get('/can-review/:facilityId', auth, async (req, res) => {
+    try {
+        const facilityId = req.params.facilityId;
+        const userId = req.user.id;
+
+        const facility = await Facility.findByPk(facilityId);
+        if (!facility) return res.status(404).json({ canReview: false, reason: 'Sân không tồn tại' });
+
+        // Kiểm tra có booking completed không
+        const completedBooking = await Booking.findOne({
+            where: {
+                customerEmail: req.user.email,
+                facilityName: facility.name,
+                status: 'completed'
+            }
+        });
+
+        if (!completedBooking) {
+            return res.json({ canReview: false, reason: 'no_completed_booking' });
+        }
+
+        // Kiểm tra đã review chưa
+        const existing = await Review.findOne({ where: { userId, facilityId } });
+        if (existing) {
+            return res.json({ canReview: false, reason: 'already_reviewed' });
+        }
+
+        res.json({ canReview: true });
+    } catch (error) {
+        res.status(500).json({ canReview: false, reason: error.message });
+    }
+});
+
 // POST - Tạo review mới (yêu cầu đăng nhập)
 router.post('/', auth, async (req, res) => {
     try {
@@ -41,6 +94,20 @@ router.post('/', auth, async (req, res) => {
         // Kiểm tra sân có tồn tại không
         const facility = await Facility.findByPk(facilityId);
         if (!facility) return res.status(404).json({ message: 'Sân không tồn tại' });
+
+        // Kiểm tra user có booking đã hoàn thành cho sân này không
+        const completedBooking = await Booking.findOne({
+            where: {
+                customerEmail: req.user.email,
+                facilityName: facility.name,
+                status: 'completed'
+            }
+        });
+        if (!completedBooking) {
+            return res.status(403).json({
+                message: 'Bạn chỉ có thể đánh giá sân sau khi hoàn thành buổi đặt sân tại đây'
+            });
+        }
 
         // Kiểm tra user đã review sân này chưa
         const existing = await Review.findOne({ where: { userId, facilityId } });

@@ -1,29 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './Auth.css';
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect to home if already logged in
   useEffect(() => {
-    if (user) {
-      navigate('/', { replace: true });
-    }
+    if (user) navigate('/', { replace: true });
   }, [user, navigate]);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
     setError('');
   };
 
@@ -31,143 +25,210 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
     const result = await login(formData.email, formData.password);
-
     if (result.success) {
       navigate('/');
     } else {
       setError(result.message);
     }
-
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full">
-        {/* Card Container */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-          {/* Header with Gradient */}
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-6">
-            <h2 className="text-3xl font-bold text-white text-center">
-              Đăng Nhập
-            </h2>
-            <p className="text-blue-100 text-center mt-2">
-              Chào mừng bạn trở lại!
-            </p>
-          </div>
+    <div className="auth-page">
+      {/* LEFT – Branding Panel */}
+      <div className="auth-brand">
+        <img
+          src="/football_bg.jpg.jpg"
+          alt=""
+          className="auth-brand-bg"
+        />
 
-          {/* Form Content */}
-          <div className="px-8 py-8">
-            {error && (
-              <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
-                <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Email *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
-                    </svg>
-                  </div>
-                  <input
-                    id="email"
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    placeholder="email@example.com"
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-400"
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Mật Khẩu *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                  </div>
-                  <input
-                    id="password"
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    placeholder="Nhập mật khẩu"
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-400"
-                  />
-                </div>
-              </div>
-
-              {/* Forgot Password Link */}
-              <div className="text-right">
-                <Link
-                  to="/forgot-password"
-                  className="text-sm font-medium text-blue-600 hover:text-purple-600 transition-colors duration-200"
-                >
-                  Quên mật khẩu?
-                </Link>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Đang đăng nhập...
-                  </span>
-                ) : (
-                  'Đăng Nhập'
-                )}
-              </button>
-            </form>
-
-            {/* Footer Link */}
-            <p className="mt-6 text-center text-sm text-gray-600">
-              Chưa có tài khoản?{' '}
-              <Link
-                to="/register"
-                className="font-semibold text-blue-600 hover:text-purple-600 transition-colors duration-200"
-              >
-                Đăng ký ngay
-              </Link>
-            </p>
-          </div>
+        {/* Logo */}
+        <div className="auth-brand-logo">
+          <div className="auth-brand-logo-icon">⚽</div>
+          <span className="auth-brand-logo-text">Timsan247</span>
         </div>
 
-        {/* Additional Info */}
-        <p className="mt-6 text-center text-xs text-gray-500">
-          Bằng việc đăng nhập, bạn đồng ý với{' '}
-          <a href="#" className="text-blue-600 hover:underline">Điều khoản sử dụng</a>
-          {' '}và{' '}
-          <a href="#" className="text-blue-600 hover:underline">Chính sách bảo mật</a>
+        {/* Headline */}
+        <h1>
+          Đặt sân bóng<br />
+          <span>nhanh chóng</span><br />
+          & tiện lợi
+        </h1>
+
+        <p className="auth-brand-subtitle">
+          Tham gia cùng hơn 50,000+ người chơi bóng đá. Tìm sân, đặt lịch và thanh toán chỉ trong vài giây.
         </p>
+
+        {/* Feature list */}
+        <ul className="auth-brand-features">
+          <li>
+            <span className="auth-feature-check">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            Đặt sân 24/7, mọi lúc mọi nơi
+          </li>
+          <li>
+            <span className="auth-feature-check">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            Thanh toán an toàn, bảo mật
+          </li>
+          <li>
+            <span className="auth-feature-check">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            Hỗ trợ khách hàng tận tình
+          </li>
+        </ul>
+      </div>
+
+      {/* RIGHT – Form Panel */}
+      <div className="auth-form-panel">
+        <div className="auth-form-container">
+          <div className="auth-form-header">
+            <h2>Đăng nhập</h2>
+            <p>Chào mừng bạn trở lại! Vui lòng đăng nhập</p>
+          </div>
+
+          {error && (
+            <div className="auth-error">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            {/* Email */}
+            <div className="auth-form-group">
+              <label htmlFor="login-email">Email</label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </span>
+                <input
+                  id="login-email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                  placeholder="Vui lòng nhập email"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="auth-form-group">
+              <label htmlFor="login-password">Mật khẩu</label>
+              <div className="auth-input-wrapper">
+                <span className="auth-input-icon">
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </span>
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  placeholder="Nhập mật khẩu"
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9.27-3.11-11-7.5a11.7 11.7 0 013.168-4.477M6.343 6.343A9.97 9.97 0 0112 5c5 0 9.27 3.11 11 7.5a11.7 11.7 0 01-4.168 4.477M6.343 6.343L3 3m3.343 3.343l2.829 2.829M17.657 17.657L21 21m-3.343-3.343l-2.829-2.829M9.88 9.88a3 3 0 104.24 4.24M9.88 9.88l4.24 4.24" />
+                    </svg>
+                  ) : (
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Remember / Forgot */}
+            <div className="auth-form-options">
+              <label className="auth-remember">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={() => setRememberMe(!rememberMe)}
+                />
+                Ghi nhớ đăng nhập
+              </label>
+              <Link to="/forgot-password" className="auth-forgot-link">
+                Quên mật khẩu?
+              </Link>
+            </div>
+
+            {/* Submit */}
+            <button type="submit" className="auth-submit-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <svg className="auth-spinner" width="20" height="20" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Đang đăng nhập...
+                </>
+              ) : (
+                <>
+                  Đăng nhập
+                  <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="auth-divider">
+            <span>Hoặc</span>
+          </div>
+
+          {/* Google */}
+          <button type="button" className="auth-google-btn">
+            <img
+              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+              alt="Google"
+            />
+            Đăng nhập bằng Google
+          </button>
+
+          {/* Footer */}
+          <p className="auth-footer-link">
+            Chưa có tài khoản?{' '}
+            <Link to="/register">Đăng ký ngay</Link>
+          </p>
+
+          <p className="auth-terms">
+            Bằng việc đăng nhập, bạn đồng ý với{' '}
+            <Link to="/terms-of-service">Điều khoản dịch vụ</Link> và{' '}
+            <a href="#">Chính sách bảo mật</a>
+          </p>
+        </div>
       </div>
     </div>
   );
