@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Review, User, Facility } = require('../models');
 const Booking = require('../models/Booking');
+const { Op } = require('sequelize');
 const { auth } = require('../middleware/auth');
 
 // GET - Lấy tất cả review (public, dùng cho trang chủ)
@@ -60,7 +61,7 @@ router.get('/can-review/:facilityId', auth, async (req, res) => {
         const completedBooking = await Booking.findOne({
             where: {
                 customerEmail: req.user.email,
-                facilityName: facility.name,
+                facilityName: { [Op.like]: `${facility.name}%` },
                 status: 'completed'
             }
         });
@@ -99,7 +100,7 @@ router.post('/', auth, async (req, res) => {
         const completedBooking = await Booking.findOne({
             where: {
                 customerEmail: req.user.email,
-                facilityName: facility.name,
+                facilityName: { [Op.like]: `${facility.name}%` },
                 status: 'completed'
             }
         });
