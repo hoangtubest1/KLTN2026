@@ -137,6 +137,19 @@ const Booking = () => {
 
   const isPastTimeSelected = () => isTimePast(selectedStart);
 
+  // Check if a given start time (HH:mm) conflicts with any active booking for selected facility/court
+  const isTimeBooked = (timeStr) => {
+    if (!selectedFacility) return false;
+    const fullName = `${selectedFacility.name} - S\u00e2n ${selectedCourtNum}`;
+    const tF = timeToFloat(timeStr);
+    return bookedSlots.some(b => {
+      if (b.facilityName !== fullName || b.status === 'cancelled' || b.status === 'pending_payment') return false;
+      const bStart = timeToFloat((b.startTime || '00:00').substring(0, 5));
+      const bEnd = timeToFloat((b.endTime || '00:00').substring(0, 5));
+      return tF >= bStart && tF < bEnd;
+    });
+  };
+
   const handleSubmit = async () => {
     if (!selectedFacility) return setMessage({ type: 'error', text: 'Vui lòng chọn sân' });
     if (!selectedDate) return setMessage({ type: 'error', text: 'Vui lòng chọn ngày' });
@@ -336,9 +349,11 @@ const Booking = () => {
                     >
                       {START_TIMES.map(t => {
                         const past = isTimePast(t);
+                        const booked = isTimeBooked(t);
+                        const disabled = past || booked;
                         return (
-                          <option key={t} value={t} disabled={past} style={past ? { color: '#aaa' } : {}}>
-                            {t}{past ? ' (đã qua)' : ''}
+                          <option key={t} value={t} disabled={disabled} style={disabled ? { color: '#aaa' } : {}}>
+                            {t}{past ? ' (\u0111\u00e3 qua)' : booked ? ' (\u0111\u00e3 \u0111\u1eb7t)' : ''}
                           </option>
                         );
                       })}
@@ -420,8 +435,8 @@ const Booking = () => {
                       type="button"
                       onClick={() => setPaymentPlan('pay_50')}
                       className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentPlan === 'pay_50'
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
                       {paymentPlan === 'pay_50' && (
@@ -439,8 +454,8 @@ const Booking = () => {
                       type="button"
                       onClick={() => setPaymentPlan('pay_100')}
                       className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentPlan === 'pay_100'
-                          ? 'border-green-500 bg-green-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-green-500 bg-green-50 shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
                       {paymentPlan === 'pay_100' && (
@@ -463,8 +478,8 @@ const Booking = () => {
                       type="button"
                       onClick={() => setPaymentMethod('vnpay')}
                       className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentMethod === 'vnpay'
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-blue-500 bg-blue-50 shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
                       {paymentMethod === 'vnpay' && (
@@ -482,8 +497,8 @@ const Booking = () => {
                       type="button"
                       onClick={() => setPaymentMethod('momo')}
                       className={`relative p-4 rounded-xl border-2 transition-all duration-200 text-left ${paymentMethod === 'momo'
-                          ? 'border-pink-500 bg-pink-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
+                        ? 'border-pink-500 bg-pink-50 shadow-md'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                     >
                       {paymentMethod === 'momo' && (
@@ -585,7 +600,7 @@ const Booking = () => {
 
               {/* Time grid */}
               {!selectedFacility ? (
-                <p className="text-center text-gray-400 text-sm py-6">Vui lòng chọn sân</p>
+                <p className="text-center text-gray-400 text-sm py-6">Vui l\u00f2ng ch\u1ecdn s\u00e2n</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
                   {HOURS.map(h => {
@@ -593,31 +608,42 @@ const Booking = () => {
                     const booking = getBookingForHour(h);
                     const sel = isHourSelected(h);
                     const past = isHourPast(h);
+                    const isBlocked = !!booking || past;
 
                     let cls = 'relative rounded-xl border-2 py-3 text-center text-sm font-bold transition-all select-none ';
                     let icon = null;
 
                     if (booking) {
                       if (booking.status === 'confirmed') {
-                        cls += 'bg-pink-50 border-pink-300 text-pink-700';
+                        cls += 'bg-pink-50 border-pink-300 text-pink-700 cursor-not-allowed';
                       } else {
-                        cls += 'bg-yellow-50 border-yellow-300 text-yellow-700';
+                        cls += 'bg-yellow-50 border-yellow-300 text-yellow-700 cursor-not-allowed';
                       }
                       icon = <span className="absolute top-0.5 right-1 text-[10px]">📌</span>;
                     } else if (sel && !past) {
                       cls += 'bg-indigo-500 border-indigo-500 text-white shadow-md';
                     } else if (past) {
-                      cls += 'bg-gray-50 border-gray-200 text-gray-300';
+                      cls += 'bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed';
                     } else {
                       cls += 'bg-blue-50 border-blue-200 text-blue-700 hover:border-blue-400 hover:bg-blue-100 cursor-pointer';
                     }
 
                     const tooltip = booking
-                      ? `${booking.customerName} (${(booking.startTime || '').slice(0, 5)}–${(booking.endTime || '').slice(0, 5)})`
-                      : label;
+                      ? `\u0110\u00e3 \u0111\u1eb7t: ${booking.customerName} (${(booking.startTime || '').slice(0, 5)}\u2013${(booking.endTime || '').slice(0, 5)})`
+                      : past ? '\u0110\u00e3 qua' : label;
+
+                    const handleSlotClick = () => {
+                      if (isBlocked) return;
+                      setSelectedStart(label);
+                    };
 
                     return (
-                      <div key={h} className={cls} title={tooltip}>
+                      <div
+                        key={h}
+                        className={cls}
+                        title={tooltip}
+                        onClick={handleSlotClick}
+                      >
                         {icon}
                         {label}
                       </div>
