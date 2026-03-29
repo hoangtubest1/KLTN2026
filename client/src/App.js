@@ -22,6 +22,7 @@ import OwnerLanding from './pages/OwnerLanding';
 import AdminRoute from './components/AdminRoute';
 import ChatBot from './components/ChatBot';
 import PaymentResult from './pages/PaymentResult';
+import NewsDetail from './pages/NewsDetail';
 // import InstallPrompt from './components/InstallPrompt';
 import MobileNavBar from './components/MobileNavBar';
 import './App.css';
@@ -82,6 +83,7 @@ function AppContent() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/owner" element={<OwnerLanding />} />
           <Route path="/payment/result" element={<PaymentResult />} />
+          <Route path="/news/:id" element={<NewsDetail />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
