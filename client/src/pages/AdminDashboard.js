@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import { format } from 'date-fns';
+import AdminCoupons from '../components/AdminCoupons';
 
 // Helper to extract Google Maps embed src from iframe or URL
 const extractMapSrc = (input) => {
@@ -579,6 +580,15 @@ const AdminDashboard = () => {
               }`}
           >
             📰 Quản Lý Tin Tức
+          </button>
+          <button
+            onClick={() => setActiveTab('coupons')}
+            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'coupons'
+              ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100'
+              }`}
+          >
+            🏷️ Mã Giảm Giá
           </button>
           <button
             onClick={() => navigate('/statistics')}
@@ -1675,6 +1685,11 @@ const AdminDashboard = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* Coupons Tab */}
+      {activeTab === 'coupons' && (
+        <AdminCoupons />
       )}
     </div>
   );

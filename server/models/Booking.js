@@ -110,6 +110,15 @@ const Booking = sequelize.define('Booking', {
     type: DataTypes.TEXT,
     allowNull: true
   },
+  couponCode: {
+    type: DataTypes.STRING(50),
+    allowNull: true
+  },
+  discountAmount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0
+  },
   paymentMethod: {
     type: DataTypes.ENUM('at_venue', 'vnpay', 'momo'),
     defaultValue: 'at_venue',

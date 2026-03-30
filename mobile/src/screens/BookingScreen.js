@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity,
     StyleSheet, Alert, ActivityIndicator
@@ -27,23 +27,69 @@ function fmtDisplay(d) {
     return d.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
+// Tạo session ID duy nhất cho mỗi lần mount màn hình
+function makeSessionId() {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 export default function BookingScreen({ route, navigation }) {
     const { facility } = route.params;
     const { isAuthenticated, user } = useAuth();
 
     const [selectedDate, setSelectedDate] = useState(getDates(14)[0]);
     const [bookedSlots, setBookedSlots] = useState([]);
+    const [viewingSlots, setViewingSlots] = useState([]); // slots đang bị lock bởi người KHÁC
     const [selectedStart, setSelectedStart] = useState(null);
     const [selectedEnd, setSelectedEnd] = useState(null);
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
+    // Session ID cố định trong suốt lifecycle của màn hình
+    const sessionId = useRef(makeSessionId()).current;
+
     const dates = getDates(14);
 
+    // ── Fetch booked slots khi đổi ngày ──
     useEffect(() => {
         fetchBooked();
-    }, [selectedDate]);
+    }, [selectedDate]); // eslint-disable-line
 
+    // ── Fetch viewing slots + poll mỗi 500ms (dưới 1s) ──
+    useEffect(() => {
+        fetchViewingSlots();
+        const iv = setInterval(fetchViewingSlots, 500);
+        return () => clearInterval(iv);
+    }, [selectedDate]); // eslint-disable-line
+
+    // ── Heartbeat mỗi 30s — gia hạn TTL lock đang giữ ──
+    useEffect(() => {
+        if (!selectedStart) return;
+        const hb = setInterval(() => {
+            const lockedStarts = selectedEnd
+                ? HOURS.slice(HOURS.indexOf(selectedStart), HOURS.indexOf(selectedEnd) + 1)
+                : [selectedStart];
+            api.patch('/slot-views', {
+                facilityId: facility.id,
+                date: fmt(selectedDate),
+                slotStarts: lockedStarts,
+                sessionId,
+            }).catch(() => {});
+        }, 30000);
+        return () => clearInterval(hb);
+    }, [selectedStart, selectedEnd, selectedDate]); // eslint-disable-line
+
+    // ── Cleanup lock khi unmount màn hình ──
+    useEffect(() => {
+        return () => {
+            if (selectedStart) {
+                unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
+            }
+        };
+    }, []); // eslint-disable-line — chỉ chạy khi unmount
+
+    // ─────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────
     const fetchBooked = async () => {
         try {
             setLoading(true);
@@ -56,30 +102,90 @@ export default function BookingScreen({ route, navigation }) {
         }
     };
 
+    const fetchViewingSlots = useCallback(async () => {
+        try {
+            const res = await api.get(
+                `/slot-views?facilityId=${facility.id}&date=${fmt(selectedDate)}&sessionId=${sessionId}`
+            );
+            setViewingSlots(Array.isArray(res.data) ? res.data : []);
+        } catch {
+            // non-critical
+        }
+    }, [selectedDate]); // eslint-disable-line
+
+    const unlockCurrentSlots = (start, end, date) => {
+        if (!start) return;
+        const lockedStarts = end
+            ? HOURS.slice(HOURS.indexOf(start), HOURS.indexOf(end) + 1)
+            : [start];
+        api.delete('/slot-views', {
+            data: { facilityId: facility.id, date: fmt(date), slotStarts: lockedStarts, sessionId }
+        }).catch(() => {});
+    };
+
+    const lockSlots = (start, end, date) => {
+        if (!start) return;
+        const lockedStarts = end
+            ? HOURS.slice(HOURS.indexOf(start), HOURS.indexOf(end) + 1)
+            : [start];
+        api.post('/slot-views', {
+            facilityId: facility.id,
+            date: fmt(date),
+            slotStarts: lockedStarts,
+            sessionId,
+        }).catch(() => {});
+    };
+
+    // ─────────────────────────────────────────────────────────────────
+    // Slot logic
+    // ─────────────────────────────────────────────────────────────────
     const isBooked = (hour) => bookedSlots.some(s => s.startTime <= hour && hour < s.endTime);
+    const isViewing = (hour) => !isBooked(hour) && viewingSlots.includes(hour); // người khác đang chọn
 
     const handleSelectSlot = (hour) => {
-        if (isBooked(hour)) return;
+        if (isBooked(hour) || isViewing(hour)) return;
+
         if (!selectedStart) {
+            // Chọn giờ bắt đầu
+            unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
             setSelectedStart(hour);
             setSelectedEnd(null);
+            lockSlots(hour, null, selectedDate);
         } else if (selectedStart === hour) {
+            // Bỏ chọn
+            unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
             setSelectedStart(null);
             setSelectedEnd(null);
         } else {
+            // Chọn giờ kết thúc
             const start = selectedStart < hour ? selectedStart : hour;
             const end = selectedStart < hour ? hour : selectedStart;
-            // Check không có slot đã đặt ở giữa
+
+            // Kiểm tra conflict giữa khoảng đã chọn
             const conflict = HOURS.slice(HOURS.indexOf(start), HOURS.indexOf(end))
                 .some(h => isBooked(h));
             if (conflict) {
                 Alert.alert('Lỗi', 'Có khung giờ đã được đặt trong khoảng này!');
+                unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
                 setSelectedStart(null);
+                setSelectedEnd(null);
                 return;
             }
+
+            // Unlock slot cũ, lock range mới
+            unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
             setSelectedStart(start);
             setSelectedEnd(end);
+            lockSlots(start, end, selectedDate);
         }
+    };
+
+    const handleDateChange = (d) => {
+        // Unlock slot hiện tại trước khi đổi ngày
+        if (selectedStart) unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
+        setSelectedDate(d);
+        setSelectedStart(null);
+        setSelectedEnd(null);
     };
 
     const isSelected = (hour) => {
@@ -94,6 +200,9 @@ export default function BookingScreen({ route, navigation }) {
         return hours * Number(facility.pricePerHour || 0);
     };
 
+    // ─────────────────────────────────────────────────────────────────
+    // Booking
+    // ─────────────────────────────────────────────────────────────────
     const handleBook = async () => {
         if (!isAuthenticated) {
             Alert.alert('Chưa đăng nhập', 'Vui lòng đăng nhập để đặt sân', [
@@ -133,11 +242,14 @@ export default function BookingScreen({ route, navigation }) {
                 totalPrice: calcTotal(),
                 paymentMethod: 'direct',
             });
-            // Reload booked slots so the grid updates immediately
+
+            // Unlock sau khi đặt thành công
+            unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
+
             await fetchBooked();
-            // Clear selection
             setSelectedStart(null);
             setSelectedEnd(null);
+
             Alert.alert('🎉 Đặt sân thành công!', 'Lịch đặt của bạn đang chờ xác nhận.', [
                 { text: 'OK' },
                 { text: 'Xem lịch đặt', onPress: () => navigation.navigate('Bookings') }
@@ -152,6 +264,9 @@ export default function BookingScreen({ route, navigation }) {
     const totalHours = selectedStart && selectedEnd
         ? HOURS.indexOf(selectedEnd) - HOURS.indexOf(selectedStart) : 0;
 
+    // ─────────────────────────────────────────────────────────────────
+    // Render
+    // ─────────────────────────────────────────────────────────────────
     return (
         <View style={styles.container}>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -172,7 +287,7 @@ export default function BookingScreen({ route, navigation }) {
                                 <TouchableOpacity
                                     key={fmt(d)}
                                     style={[styles.dateChip, active && styles.dateChipActive]}
-                                    onPress={() => { setSelectedDate(d); setSelectedStart(null); setSelectedEnd(null); }}
+                                    onPress={() => handleDateChange(d)}
                                 >
                                     <Text style={[styles.dateChipWeekday, active && styles.dateChipTextActive]}>
                                         {isToday ? 'Hôm nay' : d.toLocaleDateString('vi-VN', { weekday: 'short' })}
@@ -197,6 +312,7 @@ export default function BookingScreen({ route, navigation }) {
                             {HOURS.map((hour) => {
                                 const booked = isBooked(hour);
                                 const selected = isSelected(hour);
+                                const viewing = isViewing(hour);
                                 return (
                                     <TouchableOpacity
                                         key={hour}
@@ -204,25 +320,31 @@ export default function BookingScreen({ route, navigation }) {
                                             styles.slot,
                                             booked && styles.slotBooked,
                                             selected && styles.slotSelected,
+                                            viewing && styles.slotViewing,
                                         ]}
                                         onPress={() => handleSelectSlot(hour)}
-                                        disabled={booked}
-                                        activeOpacity={booked ? 1 : 0.7}
+                                        disabled={booked || viewing}
+                                        activeOpacity={(booked || viewing) ? 1 : 0.7}
                                     >
                                         <Text style={[
                                             styles.slotText,
                                             booked && styles.slotTextBooked,
                                             selected && styles.slotTextSelected,
+                                            viewing && styles.slotTextViewing,
                                         ]}>
-                                            {booked ? '🔒' : selected ? '✓' : ''}
+                                            {booked ? '🔒' : selected ? '✓' : viewing ? '👁' : ''}
                                         </Text>
                                         <Text style={[
                                             styles.slotHour,
                                             booked && styles.slotTextBooked,
                                             selected && styles.slotTextSelected,
+                                            viewing && styles.slotTextViewing,
                                         ]}>
                                             {hour}
                                         </Text>
+                                        {viewing && (
+                                            <Text style={styles.slotViewingLabel}>đang chọn</Text>
+                                        )}
                                     </TouchableOpacity>
                                 );
                             })}
@@ -242,6 +364,10 @@ export default function BookingScreen({ route, navigation }) {
                         <View style={styles.legendItem}>
                             <View style={[styles.legendBox, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]} />
                             <Text style={styles.legendText}>Đã đặt</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                            <View style={[styles.legendBox, { backgroundColor: '#fff7ed', borderColor: '#fb923c' }]} />
+                            <Text style={styles.legendText}>Đang chọn</Text>
                         </View>
                     </View>
                 </View>
@@ -328,12 +454,18 @@ const styles = StyleSheet.create({
         backgroundColor: '#18458B', borderColor: '#0f2d6b', borderWidth: 2,
         shadowColor: '#18458B', shadowOpacity: 0.4, shadowRadius: 6, elevation: 4,
     },
+    // 🟠 Slot đang bị người khác chọn
+    slotViewing: {
+        backgroundColor: '#fff7ed', borderColor: '#fb923c', borderWidth: 2,
+    },
     slotText: { fontSize: 14, marginBottom: 2 },
     slotHour: { fontSize: 12, fontWeight: '700', color: '#15803d' },
     slotTextBooked: { color: '#ef4444' },
     slotTextSelected: { color: '#fff', fontWeight: '700' },
+    slotTextViewing: { color: '#c2410c', fontWeight: '700' },
+    slotViewingLabel: { fontSize: 9, color: '#c2410c', fontWeight: '600', marginTop: 1 },
 
-    legend: { flexDirection: 'row', gap: 14, marginTop: 14, flexWrap: 'wrap' },
+    legend: { flexDirection: 'row', gap: 10, marginTop: 14, flexWrap: 'wrap' },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     legendBox: { width: 22, height: 16, borderRadius: 4, borderWidth: 1.5 },
     legendText: { fontSize: 12, color: '#374151', fontWeight: '500' },

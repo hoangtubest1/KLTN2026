@@ -7,6 +7,7 @@ const Facility = require('./Facility');
 const Booking = require('./Booking');
 const Review = require('./Review');
 const News = require('./News');
+const Coupon = require('./Coupon');
 
 // ============================================
 // DEFINE RELATIONSHIPS (ASSOCIATIONS)
@@ -79,5 +80,6 @@ module.exports = {
     Booking,
     Review,
     News,
+    Coupon,
     syncDatabase
 };

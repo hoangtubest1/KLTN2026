@@ -117,7 +117,7 @@ router.post('/', auth, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { sportId, facilityName, facilityAddress, facilityPhone, customerName, customerPhone, customerEmail, date, startTime, endTime, notes } = req.body;
+    const { sportId, facilityName, facilityAddress, facilityPhone, customerName, customerPhone, customerEmail, date, startTime, endTime, notes, couponCode, discountAmount } = req.body;
 
     // Check if sport exists
     const sport = await Sport.findByPk(sportId);
@@ -170,8 +170,19 @@ router.post('/', auth, [
       duration,
       totalPrice,
       notes,
+      couponCode: couponCode || null,
+      discountAmount: discountAmount || 0,
       status: 'pending'
     });
+
+    // Nếu có xài mã giảm giá, tăng lượt dùng
+    if (couponCode) {
+      const Coupon = require('../models/Coupon');
+      const coupon = await Coupon.findOne({ where: { code: couponCode } });
+      if (coupon) {
+        await coupon.increment('currentUses');
+      }
+    }
 
     // Fetch with sport info
     const populatedBooking = await Booking.findByPk(booking.id, {

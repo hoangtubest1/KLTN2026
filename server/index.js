@@ -44,6 +44,8 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', require('./routes/chatbot'));
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/news', require('./routes/news'));
+app.use('/api/slot-views', require('./routes/slotViews'));
+app.use('/api/coupons', require('./routes/coupons'));
 
 // DEBUG - check env vars and test login (DELETE AFTER USE)
 app.get('/api/debug', async (req, res) => {

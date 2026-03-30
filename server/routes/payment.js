@@ -40,7 +40,7 @@ async function createBookingFromRequest(req, paymentMethod) {
     sportId, facilityName, facilityAddress, facilityPhone,
     customerName, customerPhone, customerEmail,
     date, startTime, endTime, duration, totalPrice, notes,
-    paymentPlan, amountToPay
+    paymentPlan, amountToPay, couponCode, discountAmount
   } = req.body;
 
   // Validate
@@ -54,8 +54,8 @@ async function createBookingFromRequest(req, paymentMethod) {
     throw new Error('Môn thể thao không tồn tại');
   }
 
-  // Auto-expire: cancel pending_payment bookings older than 15 minutes
-  const expireTime = new Date(Date.now() - 15 * 60 * 1000);
+  // Auto-expire: cancel pending_payment bookings older than 5 minutes
+  const expireTime = new Date(Date.now() - 5 * 60 * 1000);
   await Booking.update(
     { status: 'cancelled', paymentStatus: 'failed' },
     {
@@ -72,7 +72,7 @@ async function createBookingFromRequest(req, paymentMethod) {
       sportId,
       facilityName,
       date,
-      status: { [Op.in]: ['pending', 'confirmed'] },
+      status: { [Op.in]: ['pending', 'confirmed', 'pending_payment'] },
       [Op.or]: [{
         [Op.and]: [
           { startTime: { [Op.lt]: endTime } },
@@ -107,9 +107,11 @@ async function createBookingFromRequest(req, paymentMethod) {
     paymentMethod,
     paymentStatus: 'unpaid',
     vnpayTxnRef: txnRef,
+    couponCode: couponCode || null,
+    discountAmount: discountAmount || 0,
   });
   console.log(`✅ Booking #${booking.id} created with vnpayTxnRef: ${booking.vnpayTxnRef}`);
-  
+
   // Verify it's actually in the DB
   const verify = await Booking.findOne({ where: { vnpayTxnRef: txnRef } });
   console.log(`🔍 Verify booking exists in DB: ${verify ? `YES (id=${verify.id})` : 'NO!'}`);
@@ -126,7 +128,7 @@ async function updateBookingAfterPayment(txnRef, success) {
   if (!booking) {
     console.log('❌ No booking found for txnRef:', txnRef);
     // Debug: list all bookings to see what's in the DB
-    const allBookings = await Booking.findAll({ 
+    const allBookings = await Booking.findAll({
       attributes: ['id', 'vnpayTxnRef', 'status', 'paymentStatus', 'createdAt'],
       order: [['id', 'DESC']],
       limit: 5
@@ -140,13 +142,26 @@ async function updateBookingAfterPayment(txnRef, success) {
     await booking.update({ paymentStatus: 'paid', status: 'pending' });
     console.log(`✅ Booking #${booking.id} updated to pending/paid (awaiting admin confirmation)`);
 
+    // Increment coupon uses if any
+    if (booking.couponCode) {
+      const { Coupon } = require('../models');
+      try {
+        const coupon = await Coupon.findOne({ where: { code: booking.couponCode } });
+        if (coupon) {
+          await coupon.increment('currentUses');
+        }
+      } catch (err) {
+        console.error('❌ Failed to increment coupon usage:', err.message);
+      }
+    }
+
     // Gửi email chờ xác nhận
     const populatedBooking = await Booking.findByPk(booking.id, {
       include: [{ model: Sport, as: 'sport' }]
     });
     const bookingData = populatedBooking.toJSON();
     console.log(`📧 Sending pending confirmation email to: ${bookingData.customerEmail}`);
-    
+
     try {
       const emailResult = await sendBookingConfirmationEmail(bookingData);
       console.log('📧 Email result:', JSON.stringify(emailResult));

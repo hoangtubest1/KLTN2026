@@ -47,13 +47,11 @@ const NewsDetail = () => {
         return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
     };
 
-    // Render content: split by \n and detect image URLs
     const renderContent = (content) => {
         if (!content) return null;
         const paragraphs = content.split('\n').filter(p => p.trim() !== '');
         return paragraphs.map((para, i) => {
             const trimmed = para.trim();
-            // If line is an image URL
             if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(trimmed)) {
                 return (
                     <div key={i} className="news-content-image">
@@ -61,7 +59,6 @@ const NewsDetail = () => {
                     </div>
                 );
             }
-            // Caption: short line after an image line
             const prevTrimmed = i > 0 ? paragraphs[i - 1].trim() : '';
             if (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(prevTrimmed) && trimmed.length < 200) {
                 return <p key={i} className="news-image-caption">{trimmed}</p>;
@@ -93,7 +90,6 @@ const NewsDetail = () => {
     return (
         <div className="news-detail-page">
             <div className="news-detail-container">
-                {/* Back button */}
                 <button onClick={() => navigate(-1)} className="news-back-btn">
                     <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -102,9 +98,7 @@ const NewsDetail = () => {
                 </button>
 
                 <div className="news-detail-layout">
-                    {/* ── Main Article ── */}
                     <article className="news-article">
-                        {/* Meta */}
                         <div className="news-meta">
                             <span className="news-meta-date">
                                 <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -124,27 +118,22 @@ const NewsDetail = () => {
                             </span>
                         </div>
 
-                        {/* Title */}
                         <h1 className="news-title">{article.title}</h1>
 
-                        {/* Summary */}
                         {article.summary && (
                             <p className="news-summary">{article.summary}</p>
                         )}
 
-                        {/* Hero image */}
                         {article.image && (
                             <div className="news-hero-image">
                                 <img src={article.image} alt={article.title} />
                             </div>
                         )}
 
-                        {/* Body content */}
                         <div className="news-body">
                             {renderContent(article.content)}
                         </div>
 
-                        {/* Share bar */}
                         <div className="news-share-bar">
                             <span className="news-share-label">Chia sẻ:</span>
                             <a
@@ -171,7 +160,6 @@ const NewsDetail = () => {
                         </div>
                     </article>
 
-                    {/* ── Sidebar: Related Articles ── */}
                     {related.length > 0 && (
                         <aside className="news-sidebar">
                             <h3 className="news-sidebar-title">Bài viết liên quan</h3>
@@ -227,7 +215,6 @@ const NewsDetail = () => {
           border-radius: 8px; font-weight: 600;
           cursor: pointer; margin-top: 8px;
         }
-
         .news-detail-container {
           max-width: 1100px;
           margin: 0 auto;
@@ -241,7 +228,6 @@ const NewsDetail = () => {
           transition: color 0.2s;
         }
         .news-back-btn:hover { color: #22b84c; }
-
         .news-detail-layout {
           display: grid;
           grid-template-columns: 1fr 300px;
@@ -251,8 +237,6 @@ const NewsDetail = () => {
         @media (max-width: 900px) {
           .news-detail-layout { grid-template-columns: 1fr; }
         }
-
-        /* Article */
         .news-article {
           background: #fff;
           border-radius: 16px;
@@ -262,7 +246,6 @@ const NewsDetail = () => {
         @media (max-width: 600px) {
           .news-article { padding: 24px 18px; }
         }
-
         .news-meta {
           display: flex; align-items: center; gap: 20px;
           font-size: 13px; color: #9ca3af;
@@ -272,7 +255,6 @@ const NewsDetail = () => {
         .news-meta-date, .news-meta-time {
           display: flex; align-items: center; gap: 5px;
         }
-
         .news-title {
           font-size: 28px;
           font-weight: 800;
@@ -282,7 +264,6 @@ const NewsDetail = () => {
           margin: 0 0 18px;
         }
         @media (max-width: 600px) { .news-title { font-size: 22px; } }
-
         .news-summary {
           font-size: 16px;
           color: #4b5563;
@@ -292,7 +273,6 @@ const NewsDetail = () => {
           padding-left: 16px;
           margin: 0 0 24px;
         }
-
         .news-hero-image {
           border-radius: 12px;
           overflow: hidden;
@@ -304,11 +284,8 @@ const NewsDetail = () => {
           object-fit: cover;
           display: block;
         }
-
         .news-body { font-size: 16px; color: #374151; line-height: 1.8; }
-        .news-body-para {
-          margin-bottom: 16px;
-        }
+        .news-body-para { margin-bottom: 16px; }
         .news-content-image {
           margin: 24px 0;
           border-radius: 10px;
@@ -325,8 +302,6 @@ const NewsDetail = () => {
           font-style: italic;
           margin: -16px 0 24px;
         }
-
-        /* Share */
         .news-share-bar {
           display: flex; align-items: center; gap: 10px;
           margin-top: 36px; padding-top: 24px;
@@ -344,8 +319,6 @@ const NewsDetail = () => {
         .news-share-btn:hover { opacity: 0.85; }
         .news-share-btn.facebook { background: #1877f2; color: #fff; }
         .news-share-btn.copy { background: #f3f4f6; color: #374151; }
-
-        /* Sidebar */
         .news-sidebar {
           background: #fff;
           border-radius: 16px;
