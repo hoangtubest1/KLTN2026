@@ -80,7 +80,7 @@ sequelize.authenticate()
   .then(() => {
     console.log('✅ MySQL connection established successfully');
 
-    // TẠM THỜI bật alter: true để thêm columns mới (couponCode, discountAmount) + bảng Coupon\n    // TODO: Đổi lại sau khi deploy thành công\n    const syncOptions = { alter: true };
+    const syncOptions = { alter: true };
     if (syncOptions.alter) {
       console.log('⚠️ Running with ALTER mode - will modify tables to match models');
     }
