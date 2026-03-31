@@ -80,9 +80,7 @@ sequelize.authenticate()
   .then(() => {
     console.log('✅ MySQL connection established successfully');
 
-    // Chỉ dùng alter: true khi DB_ALTER=true (chạy 1 lần để thêm columns mới, sau đó tắt)
-    // KHÔNG dùng alter: true liên tục vì có thể gây mất data với MySQL ENUM columns
-    const syncOptions = process.env.DB_ALTER === 'true' ? { alter: true } : {};
+    // TẠM THỜI bật alter: true để thêm columns mới (couponCode, discountAmount) + bảng Coupon\n    // TODO: Đổi lại sau khi deploy thành công\n    const syncOptions = { alter: true };
     if (syncOptions.alter) {
       console.log('⚠️ Running with ALTER mode - will modify tables to match models');
     }
