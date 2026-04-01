@@ -141,7 +141,7 @@ router.get('/:id/booked-slots', async (req, res) => {
             where: {
                 facilityName: { [Op.like]: `${facility.name}%` },
                 date: seq.where(seq.fn('DATE', seq.col('date')), date),
-                status: { [Op.in]: ['pending', 'confirmed'] },
+                status: { [Op.in]: ['pending', 'confirmed', 'pending_payment'] },
             },
             attributes: ['startTime', 'endTime', 'status', 'customerName', 'facilityName'],
         });

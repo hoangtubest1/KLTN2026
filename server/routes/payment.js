@@ -13,24 +13,25 @@ const { Op } = require('sequelize');
 // VNPay config
 // ============================================================
 const vnpay = new VNPay({
-  tmnCode: process.env.VNPAY_TMN_CODE || 'X5IEZN31',
-  secureSecret: process.env.VNPAY_HASH_SECRET || 'DIO443NDX4TXGBCG48XR5PMJMKMJC7LF',
+  tmnCode: process.env.VNPAY_TMN_CODE,
+  secureSecret: process.env.VNPAY_HASH_SECRET,
   vnpayHost: 'https://sandbox.vnpayment.vn',
-  testMode: true,
+  testMode: process.env.NODE_ENV !== 'production',
   hashAlgorithm: 'SHA512',
   loggerFn: ignoreLogger,
 });
 
-const vnp_ReturnUrl = process.env.VNPAY_RETURN_URL || 'http://localhost:5000/api/payment/vnpay_return';
+const vnp_ReturnUrl = process.env.VNPAY_RETURN_URL;
 
 // ============================================================
-// MoMo config (Test/Sandbox)
+// MoMo config
 // ============================================================
-const MOMO_ACCESS_KEY = process.env.MOMO_ACCESS_KEY || 'F8BBA842ECF85';
-const MOMO_SECRET_KEY = process.env.MOMO_SECRET_KEY || 'K951B6PE1waDMi640xX08PD3vg6EkVlz';
-const MOMO_PARTNER_CODE = process.env.MOMO_PARTNER_CODE || 'MOMO';
-const MOMO_REDIRECT_URL = process.env.MOMO_REDIRECT_URL || 'http://localhost:5000/api/payment/momo_return';
-const MOMO_IPN_URL = process.env.MOMO_IPN_URL || 'http://localhost:5000/api/payment/momo_ipn';
+const MOMO_ACCESS_KEY = process.env.MOMO_ACCESS_KEY;
+const MOMO_SECRET_KEY = process.env.MOMO_SECRET_KEY;
+const MOMO_PARTNER_CODE = process.env.MOMO_PARTNER_CODE;
+const MOMO_ENDPOINT = process.env.MOMO_ENDPOINT;
+const MOMO_REDIRECT_URL = process.env.MOMO_REDIRECT_URL;
+const MOMO_IPN_URL = process.env.MOMO_IPN_URL;
 
 // ============================================================
 // Helper: tạo booking từ request body

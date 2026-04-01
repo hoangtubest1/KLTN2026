@@ -139,11 +139,11 @@ export default function BookingScreen({ route, navigation }) {
     // ─────────────────────────────────────────────────────────────────
     // Slot logic
     // ─────────────────────────────────────────────────────────────────
-    const isBooked = (hour) => bookedSlots.some(s => s.startTime <= hour && hour < s.endTime);
-    const isViewing = (hour) => !isBooked(hour) && viewingSlots.includes(hour); // người khác đang chọn
+    const getBookingInfo = (hour) => bookedSlots.find(s => s.startTime <= hour && hour < s.endTime);
+    const isViewing = (hour) => !getBookingInfo(hour) && viewingSlots.includes(hour); // người khác đang chọn
 
     const handleSelectSlot = (hour) => {
-        if (isBooked(hour) || isViewing(hour)) return;
+        if (getBookingInfo(hour) || isViewing(hour)) return;
 
         if (!selectedStart) {
             // Chọn giờ bắt đầu
@@ -163,7 +163,7 @@ export default function BookingScreen({ route, navigation }) {
 
             // Kiểm tra conflict giữa khoảng đã chọn
             const conflict = HOURS.slice(HOURS.indexOf(start), HOURS.indexOf(end))
-                .some(h => isBooked(h));
+                .some(h => !!getBookingInfo(h));
             if (conflict) {
                 Alert.alert('Lỗi', 'Có khung giờ đã được đặt trong khoảng này!');
                 unlockCurrentSlots(selectedStart, selectedEnd, selectedDate);
@@ -310,7 +310,10 @@ export default function BookingScreen({ route, navigation }) {
                     ) : (
                         <View style={styles.slotGrid}>
                             {HOURS.map((hour) => {
-                                const booked = isBooked(hour);
+                                const bookingInfo = getBookingInfo(hour);
+                                const booked = !!bookingInfo && bookingInfo.status !== 'pending_payment';
+                                const pendingPayment = !!bookingInfo && bookingInfo.status === 'pending_payment';
+                                const isUnavailable = booked || pendingPayment;
                                 const selected = isSelected(hour);
                                 const viewing = isViewing(hour);
                                 return (
@@ -319,29 +322,35 @@ export default function BookingScreen({ route, navigation }) {
                                         style={[
                                             styles.slot,
                                             booked && styles.slotBooked,
+                                            pendingPayment && styles.slotPending,
                                             selected && styles.slotSelected,
                                             viewing && styles.slotViewing,
                                         ]}
                                         onPress={() => handleSelectSlot(hour)}
-                                        disabled={booked || viewing}
-                                        activeOpacity={(booked || viewing) ? 1 : 0.7}
+                                        disabled={isUnavailable || viewing}
+                                        activeOpacity={(isUnavailable || viewing) ? 1 : 0.7}
                                     >
                                         <Text style={[
                                             styles.slotText,
                                             booked && styles.slotTextBooked,
+                                            pendingPayment && styles.slotTextPending,
                                             selected && styles.slotTextSelected,
                                             viewing && styles.slotTextViewing,
                                         ]}>
-                                            {booked ? '🔒' : selected ? '✓' : viewing ? '👁' : ''}
+                                            {booked ? '🔒' : pendingPayment ? '⏳' : selected ? '✓' : viewing ? '👁' : ''}
                                         </Text>
                                         <Text style={[
                                             styles.slotHour,
                                             booked && styles.slotTextBooked,
+                                            pendingPayment && styles.slotTextPending,
                                             selected && styles.slotTextSelected,
                                             viewing && styles.slotTextViewing,
                                         ]}>
                                             {hour}
                                         </Text>
+                                        {pendingPayment && (
+                                            <Text style={styles.slotViewingLabel}>chờ thanh toán</Text>
+                                        )}
                                         {viewing && (
                                             <Text style={styles.slotViewingLabel}>đang chọn</Text>
                                         )}
@@ -364,6 +373,10 @@ export default function BookingScreen({ route, navigation }) {
                         <View style={styles.legendItem}>
                             <View style={[styles.legendBox, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]} />
                             <Text style={styles.legendText}>Đã đặt</Text>
+                        </View>
+                        <View style={styles.legendItem}>
+                            <View style={[styles.legendBox, { backgroundColor: '#fef3c7', borderColor: '#fde047' }]} />
+                            <Text style={styles.legendText}>Đang giữ chỗ</Text>
                         </View>
                         <View style={styles.legendItem}>
                             <View style={[styles.legendBox, { backgroundColor: '#fff7ed', borderColor: '#fb923c' }]} />
@@ -450,6 +463,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#f0fdf4', borderWidth: 1.5, borderColor: '#86efac',
     },
     slotBooked: { backgroundColor: '#fee2e2', borderColor: '#fca5a5', opacity: 0.85 },
+    slotPending: { backgroundColor: '#fef3c7', borderColor: '#fde047', opacity: 0.9 },
     slotSelected: {
         backgroundColor: '#18458B', borderColor: '#0f2d6b', borderWidth: 2,
         shadowColor: '#18458B', shadowOpacity: 0.4, shadowRadius: 6, elevation: 4,
@@ -461,6 +475,7 @@ const styles = StyleSheet.create({
     slotText: { fontSize: 14, marginBottom: 2 },
     slotHour: { fontSize: 12, fontWeight: '700', color: '#15803d' },
     slotTextBooked: { color: '#ef4444' },
+    slotTextPending: { color: '#b45309' },
     slotTextSelected: { color: '#fff', fontWeight: '700' },
     slotTextViewing: { color: '#c2410c', fontWeight: '700' },
     slotViewingLabel: { fontSize: 9, color: '#c2410c', fontWeight: '600', marginTop: 1 },

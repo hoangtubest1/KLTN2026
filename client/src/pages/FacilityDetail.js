@@ -115,7 +115,7 @@ const FacilityDetail = () => {
         finally { setLoading(false); }
     };
     const fetchBookedSlots = async (d) => {
-        try { const r = await api.get(`/bookings?date=${d}&facilityId=${id}`); setBookedSlots(r.data || []); }
+        try { const r = await api.get(`/facilities/${id}/booked-slots?date=${d}`); setBookedSlots(r.data || []); }
         catch { setBookedSlots([]); }
     };
     const fetchViewingSlots = async (d) => {
@@ -131,9 +131,9 @@ const FacilityDetail = () => {
         api.delete('/slot-views', { data: { facilityId: id, date: format(selectedDate, 'yyyy-MM-dd'), slotStart: slot.start, sessionId } }).catch(() => { });
     };
 
-    const isSlotBooked = (slot) => {
+    const getSlotBookingInfo = (slot) => {
         const sF = timeToFloat(slot.start), eF = timeToFloat(slot.end);
-        return bookedSlots.some(b => {
+        return bookedSlots.find(b => {
             if (b.status === 'cancelled') return false;
             const bS = timeToFloat((b.startTime || '00:00').substring(0, 5));
             const bE = timeToFloat((b.endTime || '00:00').substring(0, 5));
@@ -341,23 +341,27 @@ const FacilityDetail = () => {
                             <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 14 }}>Chọn khung giờ bạn muốn đặt</p>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                 {slots.map((slot, i) => {
-                                    const booked = isSlotBooked(slot);
+                                    const bookingInfo = getSlotBookingInfo(slot);
+                                    const booked = !!bookingInfo && bookingInfo.status !== 'pending_payment';
+                                    const pendingPayment = !!bookingInfo && bookingInfo.status === 'pending_payment';
+                                    const isUnavailable = booked || pendingPayment;
                                     const sel = selectedSlot && selectedSlot.start === slot.start;
-                                    const viewing = !booked && !sel && viewingSlots.includes(slot.start);
+                                    const viewing = !isUnavailable && !sel && viewingSlots.includes(slot.start);
                                     return (
-                                        <button key={i} onClick={() => { if (!booked && !viewing) handleSlotSelect(slot); }} disabled={booked || viewing}
+                                        <button key={i} onClick={() => { if (!isUnavailable && !viewing) handleSlotSelect(slot); }} disabled={isUnavailable || viewing}
                                             style={{
                                                 borderRadius: 10, padding: '8px 14px', fontSize: 13, fontWeight: 600, border: 'none',
-                                                cursor: (booked || viewing) ? 'not-allowed' : 'pointer',
-                                                background: sel ? '#22b84c' : booked ? '#f3f4f6' : viewing ? '#fff7ed' : '#f0fdf4',
-                                                color: sel ? '#fff' : booked ? '#9ca3af' : viewing ? '#c2410c' : '#166534',
+                                                cursor: (isUnavailable || viewing) ? 'not-allowed' : 'pointer',
+                                                background: sel ? '#22b84c' : pendingPayment ? '#fef3c7' : booked ? '#f3f4f6' : viewing ? '#fff7ed' : '#f0fdf4',
+                                                color: sel ? '#fff' : pendingPayment ? '#b45309' : booked ? '#9ca3af' : viewing ? '#c2410c' : '#166534',
                                                 outline: viewing ? '2px solid #fb923c' : 'none',
                                                 transition: 'all .15s'
                                             }}>
                                             {slot.start} - {slot.end}
                                             {booked && <span style={{ display: 'block', fontSize: 11 }}>đã đặt</span>}
+                                            {pendingPayment && <span style={{ display: 'block', fontSize: 11, fontWeight: 600 }}>đang giữ chỗ</span>}
                                             {viewing && <span style={{ display: 'block', fontSize: 11, fontWeight: 500 }}>👁 đang chọn...</span>}
-                                            {slot.price && !booked && !viewing && (
+                                            {slot.price && !isUnavailable && !viewing && (
                                                 <span style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: 0.8 }}>
                                                     {slot.price.toLocaleString('vi-VN')}đ/h
                                                 </span>

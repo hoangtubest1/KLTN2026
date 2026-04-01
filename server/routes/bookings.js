@@ -44,6 +44,22 @@ router.get('/', async (req, res) => {
       where.sportId = parseInt(req.query.sportId);
     }
 
+    // Filter by facilityId (matches facilityName) if provided
+    if (req.query.facilityId) {
+      const Facility = require('../models/Facility');
+      try {
+        const fac = await Facility.findByPk(req.query.facilityId);
+        if (fac) {
+          where.facilityName = fac.name;
+        }
+      } catch (_) {}
+    }
+
+    // Filter by status if provided
+    if (req.query.status) {
+      where.status = req.query.status;
+    }
+
     const bookings = await Booking.findAll({
       where,
       include: [{
@@ -133,7 +149,7 @@ router.post('/', auth, [
         facilityName,
         date: date,
         status: {
-          [Op.in]: ['pending', 'confirmed']
+          [Op.in]: ['pending', 'confirmed', 'pending_payment']
         },
         [Op.or]: [
           {
