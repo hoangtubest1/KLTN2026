@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 import { format, parseISO, parse } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -200,8 +201,8 @@ const Booking = () => {
               <h2 className="text-lg font-bold text-gray-900 mb-5">Thông tin đặt sân</h2>
               <div className="flex flex-col sm:flex-row gap-5 items-start">
                 <div className="w-full sm:w-[180px] h-[120px] rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-                  {selectedFacility?.images && selectedFacility.images.length > 0 ? (
-                    <img src={selectedFacility.images[0]} alt="Sân" className="w-full h-full object-cover" />
+                  {selectedFacility?.image ? (
+                    <img src={resolveMediaUrl(selectedFacility.image)} alt="Sân" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">Không có ảnh</div>
                   )}
@@ -328,8 +329,8 @@ const Booking = () => {
               
               <div className="flex gap-4 items-center mb-6">
                 <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-                  {selectedFacility?.images && selectedFacility.images.length > 0 && (
-                    <img src={selectedFacility.images[0]} alt="Sân mini" className="w-full h-full object-cover" />
+                  {selectedFacility?.image && (
+                    <img src={resolveMediaUrl(selectedFacility.image)} alt="Sân mini" className="w-full h-full object-cover" />
                   )}
                 </div>
                 <div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 const FieldCard = ({ facility }) => {
     const navigate = useNavigate();
@@ -14,9 +15,13 @@ const FieldCard = ({ facility }) => {
             <div className="relative h-48 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
                 {facility.image ? (
                     <img
-                        src={facility.image}
+                        src={resolveMediaUrl(facility.image)}
                         alt={facility.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = 'https://via.placeholder.com/400x300/22b84c/FFFFFF?text=S%C3%A2n';
+                        }}
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">

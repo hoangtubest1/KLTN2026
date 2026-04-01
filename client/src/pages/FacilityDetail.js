@@ -4,6 +4,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterv
 import { vi } from 'date-fns/locale';
 import api from '../api';
 import ReviewSection from '../components/ReviewSection';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 const timeToFloat = (t = '00:00') => {
     const [h, m] = t.substring(0, 5).split(':').map(Number);
@@ -182,7 +183,7 @@ const FacilityDetail = () => {
     );
 
     // ── Derived data ──
-    const images = facility.image ? [facility.image] : [];
+    const images = facility.image ? [resolveMediaUrl(facility.image)] : [];
     const amenities = [
         { icon: '🏠', label: 'Phòng thay đồ' },
         { icon: '🅿️', label: 'Bãi đỗ xe' },

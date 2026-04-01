@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 import heroBackground from '../assets/hero-background.png';
 import heroBackground2 from '../assets/hero-background2.png';
 import heroBackground3 from '../assets/hero-background3.png';
@@ -156,9 +157,13 @@ const Home = () => {
         <div className="relative overflow-hidden" style={{ height: '180px' }}>
           {facility.image ? (
             <img
-              src={facility.image}
+              src={resolveMediaUrl(facility.image)}
               alt={facility.name}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.onerror = null;
+                e.currentTarget.src = 'https://via.placeholder.com/400x300/22b84c/FFFFFF?text=S%C3%A2n';
+              }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-green-400 to-emerald-600">
@@ -475,9 +480,13 @@ const Home = () => {
                   <div className="h-44 overflow-hidden bg-gradient-to-br from-green-100 to-emerald-200 relative">
                     {item.image ? (
                       <img
-                        src={item.image}
+                        src={resolveMediaUrl(item.image)}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = 'https://via.placeholder.com/400x250/22b84c/FFFFFF?text=Tin+t%E1%BB%A9c';
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

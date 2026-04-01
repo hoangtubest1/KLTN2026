@@ -31,7 +31,8 @@ const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024
 // POST /api/upload/image
 router.post('/image', auth, admin, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Không có file nào được tải lên' });
-    const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Đường dẫn tương đối — tránh lưu localhost vào DB (lỗi ảnh trên production)
+    const url = `/uploads/${req.file.filename}`;
     res.json({ url, filename: req.file.filename });
 });
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api';
+import { resolveMediaUrl } from '../utils/mediaUrl';
 
 const NewsDetail = () => {
     const { id } = useParams();
@@ -126,7 +127,7 @@ const NewsDetail = () => {
 
                         {article.image && (
                             <div className="news-hero-image">
-                                <img src={article.image} alt={article.title} />
+                                <img src={resolveMediaUrl(article.image)} alt={article.title} />
                             </div>
                         )}
 
@@ -168,7 +169,7 @@ const NewsDetail = () => {
                                     <Link key={item.id} to={`/news/${item.id}`} className="news-sidebar-item">
                                         {item.image && (
                                             <div className="news-sidebar-thumb">
-                                                <img src={item.image} alt={item.title} />
+                                                <img src={resolveMediaUrl(item.image)} alt={item.title} />
                                             </div>
                                         )}
                                         <div className="news-sidebar-info">
