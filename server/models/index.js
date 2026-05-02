@@ -8,6 +8,10 @@ const Booking = require('./Booking');
 const Review = require('./Review');
 const News = require('./News');
 const Coupon = require('./Coupon');
+const CasualGroup = require('./CasualGroup');
+const CasualGroupMember = require('./CasualGroupMember');
+const GroupMessage = require('./GroupMessage');
+const Notification = require('./Notification');
 
 // ============================================
 // DEFINE RELATIONSHIPS (ASSOCIATIONS)
@@ -47,6 +51,43 @@ Review.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 Facility.hasMany(Review, { foreignKey: 'facilityId', as: 'reviews', onDelete: 'CASCADE' });
 Review.belongsTo(Facility, { foreignKey: 'facilityId', as: 'facility' });
 
+// ── CasualGroup (Group Vãng Lai) ──
+// User ↔ CasualGroup (One-to-Many) — Chủ phòng
+User.hasMany(CasualGroup, { foreignKey: 'userId', as: 'casualGroups', onDelete: 'CASCADE' });
+CasualGroup.belongsTo(User, { foreignKey: 'userId', as: 'host' });
+
+// Sport ↔ CasualGroup (One-to-Many)
+Sport.hasMany(CasualGroup, { foreignKey: 'sportId', as: 'casualGroups', onDelete: 'RESTRICT' });
+CasualGroup.belongsTo(Sport, { foreignKey: 'sportId', as: 'sport' });
+
+// Facility ↔ CasualGroup (One-to-Many, optional)
+Facility.hasMany(CasualGroup, { foreignKey: 'facilityId', as: 'casualGroups', onDelete: 'SET NULL' });
+CasualGroup.belongsTo(Facility, { foreignKey: 'facilityId', as: 'facility' });
+
+// Booking ↔ CasualGroup (One-to-Many)
+Booking.hasMany(CasualGroup, { foreignKey: 'bookingId', as: 'casualGroups', onDelete: 'CASCADE' });
+CasualGroup.belongsTo(Booking, { foreignKey: 'bookingId', as: 'booking' });
+
+// CasualGroup ↔ CasualGroupMember (One-to-Many)
+CasualGroup.hasMany(CasualGroupMember, { foreignKey: 'groupId', as: 'members', onDelete: 'CASCADE' });
+CasualGroupMember.belongsTo(CasualGroup, { foreignKey: 'groupId', as: 'group' });
+
+// User ↔ CasualGroupMember (One-to-Many)
+User.hasMany(CasualGroupMember, { foreignKey: 'userId', as: 'groupMemberships', onDelete: 'CASCADE' });
+CasualGroupMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// GroupMessage ↔ CasualGroup (One-to-Many)
+CasualGroup.hasMany(GroupMessage, { foreignKey: 'groupId', as: 'messages', onDelete: 'CASCADE' });
+GroupMessage.belongsTo(CasualGroup, { foreignKey: 'groupId', as: 'group' });
+
+// GroupMessage ↔ User (One-to-Many)
+User.hasMany(GroupMessage, { foreignKey: 'userId', as: 'groupMessages', onDelete: 'CASCADE' });
+GroupMessage.belongsTo(User, { foreignKey: 'userId', as: 'sender' });
+
+// ── Notification (Thông báo) ──
+User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications', onDelete: 'CASCADE' });
+Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
 // ============================================
 // SYNC DATABASE
 // ============================================
@@ -81,5 +122,9 @@ module.exports = {
     Review,
     News,
     Coupon,
+    CasualGroup,
+    CasualGroupMember,
+    GroupMessage,
+    Notification,
     syncDatabase
 };

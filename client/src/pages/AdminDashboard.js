@@ -104,6 +104,10 @@ const AdminDashboard = () => {
   const [selectedWard, setSelectedWard] = useState('');
   const [addressDetail, setAddressDetail] = useState('');
 
+  // FindMate management state
+  const [findMates, setFindMates] = useState([]);
+  const [selectedFindMate, setSelectedFindMate] = useState(null);
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -123,6 +127,8 @@ const AdminDashboard = () => {
       fetchFacilityData();
     } else if (activeTab === 'news') {
       fetchNewsData();
+    } else if (activeTab === 'findmates') {
+      fetchFindMateData();
     }
   }, [isAuthenticated, user, filters, activeTab]);
 
@@ -534,6 +540,40 @@ const AdminDashboard = () => {
     }
   };
 
+  // ---- FindMate handlers ----
+  const fetchFindMateData = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/admin/findmates');
+      setFindMates(Array.isArray(res.data) ? res.data : []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching findmates:', err);
+      setLoading(false);
+    }
+  };
+
+  const handleToggleFindMateApproval = async (id, currentStatus) => {
+    try {
+      await api.put(`/admin/findmates/${id}/approve`, {
+        isApproved: !currentStatus
+      });
+      fetchFindMateData();
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const handleDeleteFindMate = async (id) => {
+    if (!window.confirm('Xóa bài tìm bạn này?')) return;
+    try {
+      await api.delete(`/findmate/${id}`);
+      fetchFindMateData();
+    } catch (err) {
+      alert('Lỗi khi xóa: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -580,6 +620,15 @@ const AdminDashboard = () => {
               }`}
           >
             📰 Quản Lý Tin Tức
+          </button>
+          <button
+            onClick={() => setActiveTab('findmates')}
+            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'findmates'
+              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
+              : 'text-gray-600 hover:bg-gray-100'
+              }`}
+          >
+            🤝 Quản Lý Tìm Bạn
           </button>
           <button
             onClick={() => setActiveTab('coupons')}
@@ -913,6 +962,271 @@ const AdminDashboard = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* FindMates Management Tab */}
+        {activeTab === 'findmates' && (
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <span className="text-2xl">🤝</span> Danh Sách Bài Tìm Bạn ({findMates.length})
+              </h2>
+            </div>
+
+            {findMates.length === 0 ? (
+              <div className="p-12 text-center bg-gray-50/50">
+                <div className="text-5xl mb-4 opacity-50">📝</div>
+                <p className="text-gray-500 text-lg font-medium">Chưa có bài đăng nào.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-blue-900/5 text-gray-700">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Tiêu Đề</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Môn/Ngày</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Người Đăng</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Trạng Thái (Game)</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider bg-yellow-50 text-yellow-800">Duyệt Bài</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {findMates.map((post) => (
+                      <tr key={post.id} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-gray-900 mb-1 max-w-xs truncate" title={post.title}>{post.title}</div>
+                          <div className="text-xs text-gray-500 max-w-xs truncate" title={post.location}>{post.location || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-semibold text-indigo-600 mb-1">{post.sport?.nameVi || post.sport?.name}</div>
+                          <div className="text-xs text-gray-600 font-medium">
+                            {format(new Date(post.date), 'dd/MM/yyyy')} <br/>
+                            {post.startTime.substring(0,5)} - {post.endTime.substring(0,5)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-800">{post.author?.name}</div>
+                          <div className="text-xs text-gray-500">{post.author?.phone || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-gray-100 text-gray-700`}>
+                            {post.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap bg-yellow-50/30">
+                          <button
+                            onClick={() => handleToggleFindMateApproval(post.id, post.isApproved)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                              post.isApproved 
+                                ? 'bg-green-100 text-green-700 border border-green-300 hover:bg-green-200'
+                                : 'bg-amber-500 text-white hover:bg-amber-600'
+                            }`}
+                          >
+                            {post.isApproved ? '✅ Đã Duyệt (Ẩn đi)' : '⏳ Chờ Duyệt (Bấm duyệt)'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedFindMate(post)}
+                              className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                            >
+                              Chi tiết
+                            </button>
+                            <button
+                              onClick={() => handleDeleteFindMate(post.id)}
+                              className="bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* FindMate Detail Modal */}
+            {selectedFindMate && (
+              <div
+                className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                onClick={() => setSelectedFindMate(null)}
+              >
+                <div
+                  className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4 flex justify-between items-center rounded-t-2xl">
+                    <div>
+                      <h3 className="text-white font-bold text-lg">Chi Tiết Bài Tìm Bạn</h3>
+                      <p className="text-indigo-200 text-sm">#{String(selectedFindMate.id).padStart(4, '0')}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedFindMate(null)}
+                      className="text-white hover:text-indigo-200 transition-colors text-2xl leading-none"
+                    >×</button>
+                  </div>
+
+                  {/* Status badges */}
+                  <div className="px-6 pt-4 flex flex-wrap gap-2">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                      selectedFindMate.status === 'open' ? 'bg-indigo-100 text-indigo-700' :
+                      selectedFindMate.status === 'full' ? 'bg-green-100 text-green-700' :
+                      selectedFindMate.status === 'expired' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {selectedFindMate.status === 'open' ? 'Đang Tuyển' :
+                       selectedFindMate.status === 'full' ? 'Đã Đủ Người' :
+                       selectedFindMate.status === 'expired' ? 'Hết Hạn' :
+                       selectedFindMate.status === 'closed' ? 'Đã Đóng' : selectedFindMate.status}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      selectedFindMate.isApproved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {selectedFindMate.isApproved ? '✅ Đã Duyệt' : '⏳ Chờ Duyệt'}
+                    </span>
+                  </div>
+
+                  {/* Detail rows */}
+                  <div className="px-6 py-4 space-y-3">
+                    <div className="mb-3">
+                      <h4 className="text-xl font-bold text-gray-900">{selectedFindMate.title}</h4>
+                    </div>
+
+                    {[
+                      { icon: '⚽', label: 'Môn thể thao', value: `${selectedFindMate.sport?.emoji || ''} ${selectedFindMate.sport?.nameVi || selectedFindMate.sport?.name || ''}` },
+                      { icon: '📍', label: 'Địa điểm', value: selectedFindMate.facility?.name ? `${selectedFindMate.facility.name} — ${selectedFindMate.facility.address}` : selectedFindMate.location },
+                      { icon: '🏆', label: 'Trình độ', value: selectedFindMate.skillLevel === 'any' ? 'Mọi trình độ' : selectedFindMate.skillLevel === 'beginner' ? 'Người mới' : selectedFindMate.skillLevel === 'intermediate' ? 'Trung bình' : 'Khá/Giỏi' },
+                      { icon: '📞', label: 'SĐT liên hệ', value: selectedFindMate.contactPhone },
+                    ].map((row, i) => row.value ? (
+                      <div key={i} className="flex items-start gap-3 py-2 border-b border-gray-100 last:border-0">
+                        <span className="w-7 flex-shrink-0 text-base">{row.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-400 font-medium">{row.label}</p>
+                          <p className="text-gray-800 font-semibold text-sm break-words">{row.value}</p>
+                        </div>
+                      </div>
+                    ) : null)}
+
+                    {/* Date/Time + Players */}
+                    <div className="bg-blue-50 rounded-xl p-4 grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-gray-400 font-medium">📅 Ngày</p>
+                        <p className="text-gray-800 font-bold">{selectedFindMate.date ? format(new Date(selectedFindMate.date), 'dd/MM/yyyy') : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 font-medium">⏰ Giờ</p>
+                        <p className="text-gray-800 font-bold">{(selectedFindMate.startTime || '').substring(0, 5)} – {(selectedFindMate.endTime || '').substring(0, 5)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 font-medium">👥 Số người</p>
+                        <p className="text-gray-800 font-bold">{selectedFindMate.currentPlayers} / {selectedFindMate.maxPlayers}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 font-medium">📆 Ngày đăng</p>
+                        <p className="text-gray-800 font-bold">{selectedFindMate.createdAt ? format(new Date(selectedFindMate.createdAt), 'HH:mm dd/MM/yyyy') : '—'}</p>
+                      </div>
+                    </div>
+
+                    {/* Author info */}
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Người đăng</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">👤</span>
+                        <span className="text-gray-800 font-semibold">{selectedFindMate.author?.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">📱</span>
+                        <span className="text-gray-600 text-sm">{selectedFindMate.author?.phone || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">✉️</span>
+                        <span className="text-gray-600 text-sm">{selectedFindMate.author?.email}</span>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {selectedFindMate.description && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                        <p className="text-xs text-amber-600 font-semibold mb-1">📝 Mô tả</p>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{selectedFindMate.description}</p>
+                      </div>
+                    )}
+
+                    {/* Joins list */}
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-3">
+                        Danh sách đăng ký ({selectedFindMate.joins?.length || 0})
+                      </p>
+                      {(!selectedFindMate.joins || selectedFindMate.joins.length === 0) ? (
+                        <p className="text-gray-400 text-sm text-center py-2">Chưa có ai đăng ký</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {selectedFindMate.joins.map(join => (
+                            <div key={join.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-gray-100">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                                  {join.user?.name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-800">{join.user?.name}</p>
+                                  <p className="text-xs text-gray-500">{join.user?.phone || 'N/A'} • {join.user?.email}</p>
+                                  {join.message && <p className="text-xs text-gray-400 italic mt-0.5">"{join.message}"</p>}
+                                </div>
+                              </div>
+                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                join.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                join.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {join.status === 'accepted' ? '✅ Đã duyệt' : join.status === 'pending' ? '⏳ Chờ duyệt' : '❌ Từ chối'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Modal Actions */}
+                  <div className="px-6 pb-5 flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => {
+                        handleToggleFindMateApproval(selectedFindMate.id, selectedFindMate.isApproved);
+                        setSelectedFindMate(null);
+                      }}
+                      className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        selectedFindMate.isApproved
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                          : 'bg-green-500 hover:bg-green-600 text-white'
+                      }`}
+                    >
+                      {selectedFindMate.isApproved ? '🔒 Ẩn bài (Hủy duyệt)' : '✅ Duyệt bài'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleDeleteFindMate(selectedFindMate.id);
+                        setSelectedFindMate(null);
+                      }}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      🗑️ Xóa bài
+                    </button>
+                    <button
+                      onClick={() => setSelectedFindMate(null)}
+                      className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* User Management Tab */}

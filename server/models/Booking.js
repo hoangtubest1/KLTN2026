@@ -120,7 +120,7 @@ const Booking = sequelize.define('Booking', {
     defaultValue: 0
   },
   paymentMethod: {
-    type: DataTypes.ENUM('at_venue', 'vnpay', 'momo'),
+    type: DataTypes.ENUM('at_venue', 'vnpay', 'momo', 'hold'),
     defaultValue: 'at_venue',
     allowNull: false
   },

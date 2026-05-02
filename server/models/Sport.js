@@ -28,6 +28,12 @@ const Sport = sequelize.define('Sport', {
       }
     }
   },
+  /** Icon hiển thị trên web (⚽, 🏸, …) — cột phải có trong DB (sequelize sync alter) */
+  emoji: {
+    type: DataTypes.STRING(16),
+    allowNull: true,
+    defaultValue: null
+  },
   description: {
     type: DataTypes.TEXT,
     allowNull: true

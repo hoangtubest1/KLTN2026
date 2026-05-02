@@ -32,6 +32,13 @@ const MobileNavBar = () => {
             match: (p) => p.startsWith('/fields') || p.startsWith('/facility'),
         },
         {
+            id: 'casual-group',
+            label: 'Group',
+            icon: '🤝',
+            path: '/casual-group',
+            match: (p) => p.startsWith('/casual-group'),
+        },
+        {
             id: 'bookings',
             label: 'Lịch Đặt',
             icon: '📅',

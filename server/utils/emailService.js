@@ -1,26 +1,31 @@
 const nodemailer = require('nodemailer');
 
-// Validate email configuration at startup
+// Validate email configuration (SMTP hoặc Resend)
 const validateEmailConfig = () => {
-  // If Resend API key is set, we don't need SMTP config
   if (process.env.RESEND_API_KEY) {
     return true;
   }
-  const required = ['EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM'];
-  const missing = required.filter(key => !process.env[key]);
+  // SMTP: bắt buộc user + pass + from. HOST/PORT có thể bỏ — mặc định Gmail (trước đây thiếu HOST → không gửi được dù đã set .env)
+  const required = ['EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_FROM'];
+  const missing = required.filter((key) => !process.env[key] || !String(process.env[key]).trim());
   if (missing.length > 0) {
-    console.warn(`⚠️ Email config missing: ${missing.join(', ')}. Emails will not be sent.`);
+    console.warn(`⚠️ Email config missing: ${missing.join(', ')}. Set in .env or use RESEND_API_KEY. Emails will not be sent.`);
     return false;
+  }
+  if (!process.env.EMAIL_HOST) {
+    console.warn('⚠️ EMAIL_HOST not set — using smtp.gmail.com:587. For Outlook/Yahoo set EMAIL_HOST + EMAIL_PORT in .env.');
   }
   return true;
 };
 
-// Create transporter with Gmail configuration (for localhost/SMTP)
+// SMTP transporter — mặc định Gmail nếu không cấu hình host
 const createTransporter = () => {
+  const host = process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const port = parseInt(process.env.EMAIL_PORT, 10) || 587;
   return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_PORT === '465', // true for 465, false for other ports
+    host,
+    port,
+    secure: String(port) === '465',
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD,

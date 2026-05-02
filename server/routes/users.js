@@ -31,18 +31,17 @@ router.get('/:id', auth, admin, async (req, res) => {
   }
 });
 
-// Update user role (allow any authenticated user to set role - for demo purposes)
-router.put('/:id/role', auth, async (req, res) => {
+// Update user role (admin only)
+router.put('/:id/role', auth, admin, async (req, res) => {
   try {
     const { role } = req.body;
     if (!['user', 'admin'].includes(role)) {
       return res.status(400).json({ message: 'Role không hợp lệ' });
     }
 
-    // Allow setting admin role directly without requiring admin permission
     const user = await User.findByPk(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'User không tồn tại' });
     }
 
     await user.update({ role });

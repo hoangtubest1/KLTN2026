@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
 
+const PRICE_PRESETS = [
+    { label: 'Dưới 100K', min: 0, max: '100000' },
+    { label: '100K - 200K', min: '100000', max: '200000' },
+    { label: '200K - 300K', min: '200000', max: '300000' },
+    { label: '300K - 500K', min: '300000', max: '500000' },
+    { label: 'Trên 500K', min: '500000', max: '' },
+];
+
 const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCounts, onFilterChange, filters }) => {
     const [searchText, setSearchText] = useState(filters?.name || '');
     const [minPrice, setMinPrice] = useState(filters?.minPrice || '');
@@ -8,9 +16,16 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
     const [gpsLoading, setGpsLoading] = useState(false);
     const [gpsActive, setGpsActive] = useState(!!filters?.lat);
 
-    const handleSearchSubmit = (e) => {
-        e?.preventDefault();
-        onFilterChange && onFilterChange({ name: searchText, minPrice, maxPrice, sort: sortBy });
+    const handleSearchChange = (val) => {
+        setSearchText(val);
+        // Trigger parent debounce immediately — no submit button needed
+        onFilterChange && onFilterChange({ name: val, minPrice, maxPrice, sort: sortBy });
+    };
+
+    const handlePriceChange = (newMin, newMax) => {
+        setMinPrice(newMin);
+        setMaxPrice(newMax);
+        onFilterChange && onFilterChange({ name: searchText, minPrice: newMin, maxPrice: newMax, sort: sortBy });
     };
 
     const handleSortChange = (newSort) => {
@@ -36,7 +51,7 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
                     lng: position.coords.longitude
                 });
             },
-            (error) => {
+            () => {
                 setGpsLoading(false);
                 alert('Không thể lấy vị trí. Vui lòng cho phép truy cập GPS.');
             },
@@ -50,6 +65,10 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
         onFilterChange && onFilterChange({ name: searchText, minPrice, maxPrice, sort: '', lat: null, lng: null });
     };
 
+    const activePricePreset = PRICE_PRESETS.find(p =>
+        p.min === minPrice && p.max === maxPrice
+    );
+
     return (
         <div className="bg-white rounded-xl shadow-md overflow-hidden h-fit sticky top-24">
             {/* Header */}
@@ -58,27 +77,34 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
             </div>
 
             <div className="p-4 space-y-5">
-                {/* Text Search */}
+                {/* Text Search — live, no submit needed */}
                 <div>
                     <label className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2 block">
-                        Tìm kiếm
+                        Tên sân / địa chỉ
                     </label>
-                    <form onSubmit={handleSearchSubmit}>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={searchText}
-                                onChange={(e) => setSearchText(e.target.value)}
-                                placeholder="Nhập tên sân hoặc địa chỉ..."
-                                className="w-full px-4 py-2.5 pr-10 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
-                            />
-                            <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={searchText}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                            placeholder="VD: Sân Bóng Đường Phạm Văn Đồng..."
+                            className="w-full px-4 py-2.5 pr-10 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all"
+                        />
+                        {searchText ? (
+                            <button
+                                onClick={() => handleSearchChange('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
-                        </div>
-                    </form>
+                        ) : (
+                            <svg className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        )}
+                    </div>
                 </div>
 
                 {/* Sport Filter */}
@@ -129,16 +155,43 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
                 {/* Divider */}
                 <div className="border-t border-gray-200"></div>
 
-                {/* Price Range */}
+                {/* Price Range — with quick presets */}
                 <div>
                     <h3 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-2">
                         💰 Khoảng giá (VNĐ/giờ)
                     </h3>
+
+                    {/* Quick preset chips */}
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                        <button
+                            onClick={() => handlePriceChange('', '')}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${!minPrice && !maxPrice
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                                }`}
+                        >
+                            Tất cả
+                        </button>
+                        {PRICE_PRESETS.map((preset) => (
+                            <button
+                                key={preset.label}
+                                onClick={() => handlePriceChange(preset.min, preset.max)}
+                                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${activePricePreset?.label === preset.label
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                                    }`}
+                            >
+                                {preset.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Manual range inputs */}
                     <div className="flex gap-2 items-center">
                         <input
                             type="number"
                             value={minPrice}
-                            onChange={(e) => setMinPrice(e.target.value)}
+                            onChange={(e) => handlePriceChange(e.target.value, maxPrice)}
                             placeholder="Từ"
                             className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             step="10000"
@@ -148,7 +201,7 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
                         <input
                             type="number"
                             value={maxPrice}
-                            onChange={(e) => setMaxPrice(e.target.value)}
+                            onChange={(e) => handlePriceChange(minPrice, e.target.value)}
                             placeholder="Đến"
                             className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             step="10000"
@@ -167,11 +220,11 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
                         onChange={(e) => handleSortChange(e.target.value)}
                         className="w-full px-3 py-2.5 border-2 border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
                     >
-                        <option value="">Mặc định</option>
+                        <option value="">Mặc định (Mới nhất)</option>
                         <option value="price_asc">Giá thấp → cao</option>
                         <option value="price_desc">Giá cao → thấp</option>
-                        <option value="name">Tên A → Z</option>
-                        {gpsActive && <option value="distance">Gần nhất</option>}
+                        <option value="rating">Đánh giá cao nhất ⭐</option>
+                        {gpsActive && <option value="distance">Gần nhất 📍</option>}
                     </select>
                 </div>
 
@@ -218,17 +271,6 @@ const FieldsFilterSidebar = ({ sports, selectedSport, onSportSelect, facilityCou
                         </div>
                     )}
                 </div>
-
-                {/* Apply Button */}
-                <button
-                    onClick={handleSearchSubmit}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    Áp dụng bộ lọc
-                </button>
             </div>
         </div>
     );

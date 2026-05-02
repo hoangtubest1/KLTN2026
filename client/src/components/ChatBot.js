@@ -13,7 +13,7 @@ const QUICK_REPLIES = [
 
 const WELCOME_MESSAGE = {
     role: 'bot',
-    content: '👋 Xin chào! Tôi là trợ lý AI của **T&T Sport**.\n\nTôi có thể giúp bạn tìm sân, tra giá, hướng dẫn đặt lịch và nhiều hơn nữa. Hỏi tôi bất cứ điều gì nhé! 🏆',
+    content: '👋 Xin chào! Tôi là trợ lý AI của **Timsan247**.\n\nTôi có thể giúp bạn tìm sân, tra giá, hướng dẫn đặt lịch và nhiều hơn nữa. Hỏi tôi bất cứ điều gì nhé! 🏆',
     id: 'welcome',
 };
 
@@ -34,13 +34,15 @@ export default function ChatBot() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showBadge, setShowBadge] = useState(true);
-    const messagesEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
     const inputRef = useRef(null);
     const { user } = useAuth();
 
     // Auto-scroll to bottom
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
     }, [messages, isLoading]);
 
     // Focus input when opened
@@ -68,7 +70,8 @@ export default function ChatBot() {
             .map(m => ({ role: m.role, content: m.content }));
 
         try {
-            const response = await fetch('http://localhost:5000/api/chatbot/message', {
+            const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+            const response = await fetch(`${apiBase}/chatbot/message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: userMessage, history }),
@@ -131,14 +134,14 @@ export default function ChatBot() {
                     <div className="chatbot-header">
                         <div className="chatbot-avatar">🤖</div>
                         <div className="chatbot-header-info">
-                            <h4>T&T Sport AI</h4>
+                            <h4>Timsan247 AI</h4>
                             <span><span className="status-dot" /> Đang hoạt động</span>
                         </div>
                         <button className="chatbot-close-btn" onClick={() => setIsOpen(false)}>✕</button>
                     </div>
 
                     {/* Messages */}
-                    <div className="chatbot-messages">
+                    <div ref={chatContainerRef} className="chatbot-messages">
                         {messages.map((msg) => (
                             <div key={msg.id} className={`chat-message ${msg.role}`}>
                                 <div className="msg-avatar">
@@ -161,7 +164,6 @@ export default function ChatBot() {
                                 </div>
                             </div>
                         )}
-                        <div ref={messagesEndRef} />
                     </div>
 
                     {/* Quick Replies */}

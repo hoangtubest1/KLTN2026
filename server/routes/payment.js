@@ -8,6 +8,8 @@ const Booking = require('../models/Booking');
 const Sport = require('../models/Sport');
 const { sendBookingConfirmationEmail, sendConfirmedBookingEmail } = require('../utils/emailService');
 const { Op } = require('sequelize');
+const { createNotification } = require('./notifications');
+const User = require('../models/User');
 
 // ============================================================
 // VNPay config
@@ -67,8 +69,8 @@ async function createBookingFromRequest(req, paymentMethod) {
     }
   );
 
-  // Check for booking conflicts (only pending & confirmed block the slot)
-  const existingBooking = await Booking.findOne({
+  // Check for booking conflicts
+  const existingBookings = await Booking.findAll({
     where: {
       sportId,
       facilityName,
@@ -83,13 +85,20 @@ async function createBookingFromRequest(req, paymentMethod) {
     }
   });
 
-  if (existingBooking) {
-    throw new Error('Khung giờ này đã được đặt');
+  for (const existing of existingBookings) {
+    if (existing.status === 'pending_payment') {
+      // Auto-cancel old pending_payment bookings for this slot (user retrying)
+      console.log(`♻️ Auto-cancelling old pending_payment booking #${existing.id}`);
+      await existing.update({ status: 'cancelled', paymentStatus: 'failed' });
+    } else {
+      // Slot is truly booked (pending admin confirm or confirmed)
+      throw new Error('Khung giờ này đã được đặt');
+    }
   }
 
   const txnRef = `${Date.now()}`;
 
-  console.log(`\n🆕 Creating VNPay booking with txnRef: ${txnRef}`);
+  console.log(`\n🆕 Creating ${paymentMethod} booking with txnRef: ${txnRef}`);
   const booking = await Booking.create({
     sportId,
     facilityName,
@@ -170,6 +179,23 @@ async function updateBookingAfterPayment(txnRef, success) {
       console.error('❌ Email sending error:', err.message);
     }
     console.log(`✅ Booking #${booking.id} paid successfully, awaiting admin confirmation`);
+
+    // 🔔 Thông báo realtime cho user: đặt sân thành công
+    try {
+      const owner = await User.findOne({ where: { email: booking.customerEmail } });
+      if (owner) {
+        const sportName = bookingData.sport?.nameVi || bookingData.sport?.name || '';
+        await createNotification({
+          userId: owner.id,
+          type: 'booking_confirmed',
+          title: 'Đặt sân thành công!',
+          message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã thanh toán thành công, đang chờ xác nhận.`,
+          link: '/bookings'
+        });
+      }
+    } catch (notifErr) {
+      console.error('Notification error:', notifErr.message);
+    }
   } else {
     await booking.update({ paymentStatus: 'failed', status: 'cancelled' });
     console.log(`❌ Booking #${booking.id} payment failed`);
@@ -223,7 +249,7 @@ router.get('/vnpay_return', async (req, res) => {
     console.log('🔍 VNPay return:', { isVerified: result.isVerified, isSuccess: result.isSuccess, txnRef: result.vnp_TxnRef });
 
     const txnRef = result.vnp_TxnRef;
-    const amount = Number(result.vnp_Amount) / 100;
+    const amount = result.vnp_Amount;
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
     if (result.isVerified) {
@@ -244,6 +270,14 @@ router.get('/vnpay_return', async (req, res) => {
 // ============================================================
 router.post('/create_momo_url', auth, async (req, res) => {
   try {
+    console.log('🔧 MoMo Config Check:', {
+      MOMO_ACCESS_KEY: MOMO_ACCESS_KEY ? '✅ Set' : '❌ MISSING',
+      MOMO_SECRET_KEY: MOMO_SECRET_KEY ? '✅ Set' : '❌ MISSING',
+      MOMO_PARTNER_CODE: MOMO_PARTNER_CODE || '❌ MISSING',
+      MOMO_REDIRECT_URL: MOMO_REDIRECT_URL || '❌ MISSING',
+      MOMO_IPN_URL: MOMO_IPN_URL || '❌ MISSING',
+    });
+
     const { booking, txnRef, totalPrice } = await createBookingFromRequest(req, 'momo');
 
     const orderId = MOMO_PARTNER_CODE + txnRef;
@@ -330,7 +364,8 @@ router.post('/create_momo_url', auth, async (req, res) => {
       res.status(400).json({ message: `MoMo error: ${momoResponse.message}` });
     }
   } catch (error) {
-    console.error('MoMo create error:', error);
+    console.error('MoMo create error:', error.message);
+    console.error('MoMo create error stack:', error.stack);
     res.status(500).json({ message: error.message });
   }
 });

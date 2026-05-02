@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { JWT_SECRET } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../utils/emailService');
+const { loginLimiter, otpRequestLimiter, otpVerifyLimiter, registerLimiter } = require('../middleware/rateLimit');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -15,7 +16,7 @@ const generateToken = (userId) => {
 // @route   POST /api/auth/register
 // @desc    Register a new user
 // @access  Public
-router.post('/register', [
+router.post('/register', registerLimiter, [
   body('name').notEmpty().withMessage('Tên là bắt buộc'),
   body('email').isEmail().withMessage('Email không hợp lệ'),
   body('phone').notEmpty().withMessage('Số điện thoại là bắt buộc'),
@@ -65,7 +66,7 @@ router.post('/register', [
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public
-router.post('/login', [
+router.post('/login', loginLimiter, [
   body('email').isEmail().withMessage('Email không hợp lệ'),
   body('password').notEmpty().withMessage('Mật khẩu là bắt buộc'),
 ], async (req, res) => {
@@ -174,7 +175,7 @@ router.put('/profile', require('../middleware/auth').auth, [
 // @route   POST /api/auth/forgot-password
 // @desc    Send OTP to user email for password reset
 // @access  Public
-router.post('/forgot-password', [
+router.post('/forgot-password', otpRequestLimiter, [
   body('email').isEmail().withMessage('Email không hợp lệ'),
 ], async (req, res) => {
   try {
@@ -231,7 +232,7 @@ router.post('/forgot-password', [
 // @route   POST /api/auth/verify-otp
 // @desc    Verify OTP code
 // @access  Public
-router.post('/verify-otp', [
+router.post('/verify-otp', otpVerifyLimiter, [
   body('email').isEmail().withMessage('Email không hợp lệ'),
   body('otp').isLength({ min: 6, max: 6 }).withMessage('Mã OTP phải có 6 số'),
 ], async (req, res) => {

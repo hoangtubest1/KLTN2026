@@ -50,6 +50,14 @@ router.post('/', (req, res) => {
     });
 
     res.json({ ok: true });
+
+    // Realtime: notify room about viewing changes
+    if (global.io) {
+      starts.forEach(s => {
+        const room = `facility:${facilityId}:${date}`;
+        global.io.to(room).emit('slot-viewing', { facilityId, date, slotStart: s, sessionId });
+      });
+    }
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -101,6 +109,14 @@ router.delete('/', (req, res) => {
     });
 
     res.json({ ok: true });
+
+    // Realtime: notify room about view removal
+    if (global.io) {
+      starts.forEach(s => {
+        const room = `facility:${facilityId}:${date}`;
+        global.io.to(room).emit('slot-unviewing', { facilityId, date, slotStart: s, sessionId });
+      });
+    }
 });
 
 // ──────────────────────────────────────────────────────────────────────────────

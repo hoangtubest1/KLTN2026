@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
@@ -40,6 +40,9 @@ const Booking = () => {
   const [couponLoading, setCouponLoading] = useState(false);
   const [couponMessage, setCouponMessage] = useState({ type: '', text: '' });
 
+  // Hold booking ref — tracks temporary pending_payment booking
+  const holdBookingId = useRef(null);
+
   const selectedFacility = facilities.find(f => String(f.id) === String(facilityId));
 
   // Computed details
@@ -63,6 +66,66 @@ const Booking = () => {
       setLoading(false);
     }
   };
+
+  // Hold slot on mount (block it for other users)
+  useEffect(() => {
+    if (!facilityId || !dateStr || !startStr || !endStr || !sportId) return;
+    let cancelled = false;
+
+    const holdSlot = async () => {
+      // Wait for facilities to load to get facility name
+      const facRes = await api.get(`/facilities/${facilityId}`);
+      const fac = facRes.data;
+      if (cancelled || !fac) return;
+
+      try {
+        const res = await api.post('/bookings/hold', {
+          sportId: Number(sportId),
+          facilityName: fac.name,
+          facilityAddress: fac.address,
+          facilityPhone: fac.phone,
+          date: dateStr,
+          startTime: startStr,
+          endTime: endStr,
+        });
+        if (!cancelled) {
+          holdBookingId.current = res.data.id;
+          console.log(`🔒 Slot held: booking #${res.data.id}`);
+        }
+      } catch (err) {
+        console.warn('Could not hold slot:', err.response?.data?.message || err.message);
+      }
+    };
+
+    holdSlot();
+
+    return () => {
+      cancelled = true;
+      // Release hold on unmount
+      if (holdBookingId.current) {
+        api.delete(`/bookings/hold/${holdBookingId.current}`).catch(() => {});
+        holdBookingId.current = null;
+      }
+    };
+  }, [facilityId, dateStr, startStr, endStr, sportId]);
+
+  // Release hold on tab close / reload via sendBeacon
+  useEffect(() => {
+    const handleUnload = () => {
+      if (holdBookingId.current) {
+        const apiUrl = process.env.REACT_APP_API_URL || '';
+        const token = localStorage.getItem('token');
+        // sendBeacon doesn't support DELETE, so use a POST to a release endpoint
+        // Fallback: just let the cron auto-cancel after 15 min
+        navigator.sendBeacon && navigator.sendBeacon(
+          `${apiUrl}/bookings/hold/${holdBookingId.current}/beacon`,
+          new Blob([JSON.stringify({ token })], { type: 'application/json' })
+        );
+      }
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -106,6 +169,14 @@ const Booking = () => {
 
     setSubmitting(true);
     setMessage({ type: '', text: '' });
+
+    // Release the temporary hold before creating real booking
+    if (holdBookingId.current) {
+      try {
+        await api.delete(`/bookings/hold/${holdBookingId.current}`);
+      } catch (e) { /* ignore */ }
+      holdBookingId.current = null;
+    }
 
     const finalTotalPrice = Math.max(0, totalPrice - discountAmount);
     const amountToPay = paymentPlan === 'pay_50' ? Math.round(finalTotalPrice / 2) : finalTotalPrice;

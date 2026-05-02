@@ -5,6 +5,7 @@ import { vi } from 'date-fns/locale';
 import api from '../api';
 import ReviewSection from '../components/ReviewSection';
 import { resolveMediaUrl } from '../utils/mediaUrl';
+import { useSocket } from '../context/SocketContext';
 
 const timeToFloat = (t = '00:00') => {
     const [h, m] = t.substring(0, 5).split(':').map(Number);
@@ -37,6 +38,7 @@ const isPastDay = (date) => isBefore(startOfDay(date), startOfDay(new Date()));
 const FacilityDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const socketRef = useSocket();
 
     const [facility, setFacility] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -66,13 +68,57 @@ const FacilityDetail = () => {
         } else { setViewingSlots([]); }
     }, [selectedDate, id]); // eslint-disable-line
 
-    // Poll viewing slots every 500ms (dưới 1 giây)
+    // Poll viewing slots every 5s (fallback, socket handles realtime)
     useEffect(() => {
         if (!selectedDate) return;
         const d = format(selectedDate, 'yyyy-MM-dd');
-        const iv = setInterval(() => fetchViewingSlots(d), 500);
+        const iv = setInterval(() => fetchViewingSlots(d), 5000);
         return () => clearInterval(iv);
     }, [selectedDate, id]); // eslint-disable-line
+
+    // ── Socket.IO: join/leave room + listen for realtime events ──
+    useEffect(() => {
+        if (!selectedDate || !id) return;
+        const socket = socketRef?.current;
+        if (!socket) return;
+
+        const d = format(selectedDate, 'yyyy-MM-dd');
+        const roomData = { facilityId: id, date: d };
+
+        // Join room for this facility+date
+        socket.emit('join-facility', roomData);
+
+        // Listen for slot booking status changes (hold, release, book, cancel)
+        const handleSlotUpdate = (data) => {
+            // Refresh booked slots from server to get accurate state
+            fetchBookedSlots(d);
+        };
+
+        // Listen for slot viewing changes (other users selecting slots)
+        const handleSlotViewing = (data) => {
+            if (data.sessionId === sessionId) return; // ignore own events
+            setViewingSlots(prev => {
+                if (!prev.includes(data.slotStart)) return [...prev, data.slotStart];
+                return prev;
+            });
+        };
+
+        const handleSlotUnviewing = (data) => {
+            if (data.sessionId === sessionId) return;
+            setViewingSlots(prev => prev.filter(s => s !== data.slotStart));
+        };
+
+        socket.on('slot-update', handleSlotUpdate);
+        socket.on('slot-viewing', handleSlotViewing);
+        socket.on('slot-unviewing', handleSlotUnviewing);
+
+        return () => {
+            socket.emit('leave-facility', roomData);
+            socket.off('slot-update', handleSlotUpdate);
+            socket.off('slot-viewing', handleSlotViewing);
+            socket.off('slot-unviewing', handleSlotUnviewing);
+        };
+    }, [selectedDate, id, socketRef]); // eslint-disable-line
 
     // Heartbeat mỗi 30s — gia hạn TTL lock đang giữ
     useEffect(() => {

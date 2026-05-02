@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Sport = require('../models/Sport');
 const Facility = require('../models/Facility');
+const { auth, admin } = require('../middleware/auth');
 
 // Get all sports (with facilities)
 router.get('/', async (req, res) => {
@@ -38,7 +39,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create sport (admin)
-router.post('/', async (req, res) => {
+router.post('/', auth, admin, async (req, res) => {
   try {
     const sport = await Sport.create(req.body);
     res.status(201).json(sport);
@@ -47,8 +48,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update sport
-router.put('/:id', async (req, res) => {
+// Update sport (admin)
+router.put('/:id', auth, admin, async (req, res) => {
   try {
     const sport = await Sport.findByPk(req.params.id);
     if (!sport) {
@@ -62,8 +63,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete sport
-router.delete('/:id', async (req, res) => {
+// Delete sport (admin)
+router.delete('/:id', auth, admin, async (req, res) => {
   try {
     const sport = await Sport.findByPk(req.params.id);
     if (!sport) {

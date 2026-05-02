@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -130,6 +131,15 @@ const Navbar = () => {
               )}
             </div>
 
+            {isAuthenticated && (
+              <Link
+                to="/casual-group"
+                className="text-gray-500 hover:text-indigo-600 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm flex items-center gap-1"
+              >
+                Group <span className="flex h-2 w-2 relative -top-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
+              </Link>
+            )}
+
             <Link
               to="/news"
               className="text-gray-500 hover:text-gray-900 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm"
@@ -191,6 +201,9 @@ const Navbar = () => {
                 </button>
               )}
             </div>
+
+            {/* Notification Bell — ngay cạnh search */}
+            {isAuthenticated && <NotificationBell />}
 
             {/* Owner Link */}
             <Link
@@ -313,6 +326,13 @@ const Navbar = () => {
                 </div>
               )}
             </div>
+
+            {isAuthenticated && (
+              <Link to="/casual-group" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between">
+                <span>Group Vãng Lai</span>
+                <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">MỚI</span>
+              </Link>
+            )}
 
             <Link to="/news" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-4 py-2.5 rounded-lg text-sm font-medium">
               Tin Tức

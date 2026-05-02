@@ -2,10 +2,33 @@ const express = require('express');
 const router = express.Router();
 const Booking = require('../models/Booking');
 const Sport = require('../models/Sport');
+const Facility = require('../models/Facility');
 const { body, validationResult } = require('express-validator');
 const { auth, admin } = require('../middleware/auth');
 const { sendBookingConfirmationEmail, sendConfirmedBookingEmail } = require('../utils/emailService');
 const { Op } = require('sequelize'); // Import Sequelize operators
+const { createNotification } = require('./notifications');
+
+// Helper: emit slot status change to all viewers of a facility+date room
+const emitSlotUpdate = async (facilityName, date, startTime, endTime, status) => {
+  try {
+    // Find facility by name to get facilityId for the room
+    const fac = await Facility.findOne({ where: { name: facilityName } });
+    if (fac && global.io) {
+      const room = `facility:${fac.id}:${date}`;
+      global.io.to(room).emit('slot-update', {
+        facilityName,
+        date,
+        startTime,
+        endTime,
+        status, // 'pending_payment', 'cancelled', 'pending', 'confirmed'
+      });
+      console.log(`📡 Socket emit slot-update to ${room}: ${startTime}-${endTime} → ${status}`);
+    }
+  } catch (err) {
+    console.error('Socket emit error:', err.message);
+  }
+};
 
 // Get all bookings (with optional user filter)
 // Note: This route is public but will filter by user email if token is provided
@@ -22,10 +45,8 @@ router.get('/', async (req, res) => {
         const User = require('../models/User');
         const user = await User.findByPk(decoded.userId);
         if (user && user.role !== 'admin') {
-          // Only filter by user email if NOT fetching for schedule view
-          if (!req.query.date && !req.query.sportId) {
-            where.customerEmail = user.email;
-          }
+          // Always filter by user email for non-admin users
+          where.customerEmail = user.email;
         }
       } catch (err) {
         // Invalid token, continue without filter
@@ -95,6 +116,142 @@ router.get('/date/:date', async (req, res) => {
     res.json(bookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Hold a slot temporarily (pending_payment) when user enters checkout page
+router.post('/hold', auth, async (req, res) => {
+  try {
+    const { sportId, facilityName, facilityAddress, facilityPhone, date, startTime, endTime } = req.body;
+
+    if (!sportId || !facilityName || !date || !startTime || !endTime) {
+      return res.status(400).json({ message: 'Thiếu thông tin giữ chỗ' });
+    }
+
+    const sport = await Sport.findByPk(sportId);
+    if (!sport) {
+      return res.status(404).json({ message: 'Môn thể thao không tồn tại' });
+    }
+
+    // Cancel any existing hold by this user for this same slot
+    await Booking.update(
+      { status: 'cancelled' },
+      {
+        where: {
+          sportId,
+          facilityName,
+          date,
+          startTime,
+          endTime,
+          customerEmail: req.user.email,
+          status: 'pending_payment'
+        }
+      }
+    );
+
+    // Check for conflicts (pending/confirmed/pending_payment by others)
+    const existingBooking = await Booking.findOne({
+      where: {
+        sportId,
+        facilityName,
+        date,
+        status: { [Op.in]: ['pending', 'confirmed', 'pending_payment'] },
+        [Op.or]: [{
+          [Op.and]: [
+            { startTime: { [Op.lt]: endTime } },
+            { endTime: { [Op.gt]: startTime } }
+          ]
+        }]
+      }
+    });
+
+    if (existingBooking) {
+      return res.status(400).json({ message: 'Khung giờ này đã được đặt hoặc đang giữ chỗ' });
+    }
+
+    // Calculate price
+    const start = new Date(`2000-01-01 ${startTime}`);
+    const end = new Date(`2000-01-01 ${endTime}`);
+    const duration = (end - start) / (1000 * 60 * 60);
+    const totalPrice = duration * sport.pricePerHour;
+
+    const booking = await Booking.create({
+      sportId,
+      facilityName,
+      facilityAddress: facilityAddress || '',
+      facilityPhone: facilityPhone || '',
+      customerName: req.user.name,
+      customerPhone: req.user.phone,
+      customerEmail: req.user.email,
+      date,
+      startTime,
+      endTime,
+      duration,
+      totalPrice,
+      status: 'pending_payment',
+      paymentMethod: 'hold',
+      paymentStatus: 'unpaid',
+    });
+
+    console.log(`🔒 Slot held: Booking #${booking.id} (${facilityName} ${date} ${startTime}-${endTime}) by ${req.user.email}`);
+
+    // Realtime: notify all viewers of this facility+date
+    emitSlotUpdate(facilityName, date, startTime, endTime, 'pending_payment');
+
+    res.status(201).json(booking);
+  } catch (error) {
+    console.error('Hold slot error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Release a held slot
+router.delete('/hold/:id', auth, async (req, res) => {
+  try {
+    const booking = await Booking.findByPk(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: 'Không tìm thấy' });
+    }
+    // Only the owner can release, and only if still pending_payment
+    if (booking.customerEmail !== req.user.email || booking.status !== 'pending_payment') {
+      return res.status(403).json({ message: 'Không có quyền' });
+    }
+    await booking.update({ status: 'cancelled' });
+    console.log(`🔓 Slot released: Booking #${booking.id}`);
+
+    // Realtime: notify all viewers
+    emitSlotUpdate(booking.facilityName, booking.date, booking.startTime, booking.endTime, 'cancelled');
+
+    res.json({ message: 'Đã hủy giữ chỗ' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Beacon release (for tab close — sendBeacon only supports POST)
+router.post('/hold/:id/beacon', async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(401).end();
+
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET } = require('../middleware/auth');
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const User = require('../models/User');
+    const user = await User.findByPk(decoded.userId);
+    if (!user) return res.status(401).end();
+
+    const booking = await Booking.findByPk(req.params.id);
+    if (booking && booking.customerEmail === user.email && booking.status === 'pending_payment') {
+      await booking.update({ status: 'cancelled' });
+      console.log(`🔓 Beacon release: Booking #${booking.id}`);
+
+      // Realtime: notify all viewers
+      emitSlotUpdate(booking.facilityName, booking.date, booking.startTime, booking.endTime, 'cancelled');
+    }
+    res.status(204).end();
+  } catch (error) {
+    res.status(204).end();
   }
 });
 
@@ -227,6 +384,23 @@ router.post('/', auth, [
       });
 
     res.status(201).json(populatedBooking);
+
+    // Realtime: notify slot is now booked (pending)
+    emitSlotUpdate(facilityName, date, startTime, endTime, 'pending');
+
+    // 🔔 Thông báo realtime cho user
+    try {
+      const sportName = populatedBooking.sport?.nameVi || populatedBooking.sport?.name || '';
+      await createNotification({
+        userId: req.user.id,
+        type: 'booking_confirmed',
+        title: 'Đặt sân thành công!',
+        message: `Booking #${booking.id} (${sportName} - ${facilityName}) đã được gửi, đang chờ xác nhận.`,
+        link: '/bookings'
+      });
+    } catch (notifErr) {
+      console.error('Notification error:', notifErr.message);
+    }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -259,6 +433,9 @@ router.put('/:id/cancel', auth, async (req, res) => {
     const updatedBooking = await Booking.findByPk(req.params.id, {
       include: [{ model: Sport, as: 'sport' }]
     });
+
+    // Realtime: notify slot released
+    emitSlotUpdate(booking.facilityName, booking.date, booking.startTime, booking.endTime, 'cancelled');
 
     res.json({ message: 'Hủy đặt sân thành công', booking: updatedBooking });
   } catch (error) {
@@ -303,6 +480,34 @@ router.put('/:id/status', auth, admin, async (req, res) => {
     }
 
     res.json(updatedBooking);
+
+    // 🔔 Thông báo cho user khi booking thay đổi trạng thái
+    try {
+      const User = require('../models/User');
+      const owner = await User.findOne({ where: { email: booking.customerEmail } });
+      if (owner) {
+        const sportName = updatedBooking.sport?.nameVi || updatedBooking.sport?.name || '';
+        if (status === 'confirmed') {
+          await createNotification({
+            userId: owner.id,
+            type: 'booking_confirmed',
+            title: 'Đặt sân đã xác nhận',
+            message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã được xác nhận`,
+            link: `/bookings`
+          });
+        } else if (status === 'cancelled') {
+          await createNotification({
+            userId: owner.id,
+            type: 'booking_cancelled',
+            title: 'Đặt sân đã bị hủy',
+            message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã bị hủy`,
+            link: `/bookings`
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Notification error:', notifErr.message);
+    }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

@@ -21,6 +21,7 @@ const Home = () => {
   const [sports, setSports] = useState([]);
   const [facilities, setFacilities] = useState([]);
   const [news, setNews] = useState([]);
+  const [findMates, setFindMates] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [reviewSlide, setReviewSlide] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,7 @@ const Home = () => {
       const [sportsRes, facilsRes, newsRes] = await Promise.all([
         api.get('/sports'),
         api.get('/facilities'),
-        api.get('/news'),
+        api.get('/news')
       ]);
       setSports(sportsRes.data);
       setFacilities(facilsRes.data);
@@ -100,6 +101,11 @@ const Home = () => {
       if (sportsRes.data.length > 0) {
         setSearchData(prev => ({ ...prev, sport: sportsRes.data[0].id }));
       }
+      // Fetch casual groups separately (requires auth, may fail for guests)
+      try {
+        const findMateRes = await api.get('/casual-groups?limit=3&upcoming=true');
+        setFindMates(findMateRes.data?.groups || []);
+      } catch (_) { setFindMates([]); }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -329,55 +335,78 @@ const Home = () => {
               {slides[currentSlide].subtitle}
             </p>
 
-            {/* Search Form */}
-            <form onSubmit={handleSearch} className="max-w-5xl mx-auto">
-              <div className="bg-white rounded-xl p-2 shadow-2xl">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                  <select
-                    name="sport"
-                    value={searchData.sport}
-                    onChange={handleChange}
-                    className="px-4 py-3 rounded-lg bg-white text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all border border-gray-200"
-                  >
-                    <option value="">Lọc theo loại sân</option>
-                    {sports.map((sport) => (
-                      <option key={sport.id} value={sport.id}>
-                        {sport.nameVi || sport.name}
-                      </option>
-                    ))}
-                  </select>
+            {/* Search Form — single unified input */}
+            <form onSubmit={handleSearch} className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-2xl p-2 shadow-2xl">
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {/* Sport dropdown */}
+                    <select
+                      name="sport"
+                      value={searchData.sport}
+                      onChange={handleChange}
+                      className="px-4 py-3 rounded-xl bg-gray-50 text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-green-400 transition-all border border-gray-200 flex-shrink-0"
+                    >
+                      <option value="">🏆 Tất cả môn</option>
+                      {sports.map((sport) => (
+                        <option key={sport.id} value={sport.id}>
+                          {(sport.emoji || '⚽')} {sport.nameVi || sport.name}
+                        </option>
+                      ))}
+                    </select>
 
-                  <input
-                    type="text"
-                    name="fieldName"
-                    value={searchData.fieldName}
-                    onChange={handleChange}
-                    placeholder="Nhập tên sân hoặc địa chỉ d..."
-                    className="px-4 py-3 rounded-lg bg-white text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all border border-gray-200"
-                  />
-
-                  <input
-                    type="text"
-                    name="area"
-                    value={searchData.area}
-                    onChange={handleChange}
-                    placeholder="Nhập khu vực"
-                    className="px-4 py-3 rounded-lg bg-white text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-all border border-gray-200"
-                  />
+                    {/* Combined text search: name + address */}
+                    <div className="relative flex-1">
+                      <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        name="fieldName"
+                        value={searchData.fieldName}
+                        onChange={handleChange}
+                        placeholder="Tìm sân theo tên hoặc địa chỉ..."
+                        className="w-full pl-12 pr-4 py-3 rounded-xl bg-gray-50 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 transition-all border border-gray-200"
+                      />
+                    </div>
+                  </div>
 
                   <button
                     type="submit"
-                    className="px-6 py-3 text-white font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-2 transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                    style={{ background: 'linear-gradient(to right, #22b84c, #1a9e3f)', }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(to right, #1da843, #178a37)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(to right, #22b84c, #1a9e3f)'}
+                    className="px-8 py-3 text-white font-bold rounded-xl focus:outline-none transition-all duration-300 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 whitespace-nowrap"
+                    style={{ background: 'linear-gradient(135deg, #22b84c, #1a9e3f)', minWidth: '140px' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, #1da843, #178a37)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, #22b84c, #1a9e3f)'}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    Tìm kiếm
+                    Tìm sân
                   </button>
                 </div>
+
+                {/* Popular sport quick filters */}
+                {sports.length > 0 && (
+                  <div className="flex flex-wrap gap-2 px-2 pb-1">
+                    <span className="text-xs text-gray-400 self-center py-1">Nhanh:</span>
+                    {sports.slice(0, 5).map((sport) => (
+                      <button
+                        key={sport.id}
+                        type="button"
+                        onClick={() => {
+                          setSearchData(prev => ({ ...prev, sport: sport.id }));
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all hover:scale-105 ${
+                          String(searchData.sport) === String(sport.id)
+                            ? 'bg-green-500 text-white border-green-500'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-green-400'
+                        }`}
+                      >
+                        {sport.emoji} {sport.nameVi}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </form>
           </div>
@@ -448,6 +477,55 @@ const Home = () => {
           <div className="text-center mt-4">
             <button onClick={() => navigate('/fields')} className="text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline">Xem tất cả →</button>
           </div>
+        </div>
+
+        {/* Section: Group Vãng Lai */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Group Vãng Lai</h2>
+              <p className="text-sm text-gray-400 mt-0.5">Tạo phòng chơi hoặc nhập mã để tham gia ngay</p>
+            </div>
+            <button
+              onClick={() => navigate('/casual-group')}
+              className="text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all text-indigo-500"
+            >
+              Xem tất cả <span>→</span>
+            </button>
+          </div>
+
+          {findMates.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 border border-dashed rounded-xl border-gray-200">Chưa có phòng nào đang mở.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {findMates.map(group => {
+                const progPct = Math.min(100, Math.round((group.currentPlayers / group.maxPlayers) * 100));
+                const displayDate = new Date(group.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+                return (
+                  <div key={group.id} onClick={() => navigate(`/casual-group/${group.id}`)} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer border border-gray-100 group flex flex-col">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl" title={group.sport?.nameVi}>{group.sport?.emoji || '⚽'}</span>
+                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg font-mono">{group.roomCode}</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-1 uppercase rounded bg-green-100 text-green-700">Đang mở</span>
+                    </div>
+                    <h3 className="font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">{group.title}</h3>
+                    <p className="text-xs text-gray-500 mb-4 line-clamp-1">📍 {group.location || group.facility?.name}</p>
+                    <div className="mt-auto">
+                      <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
+                        <span>👥 {group.currentPlayers}/{group.maxPlayers}</span>
+                        <span className="text-indigo-500">{displayDate}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${progPct}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Section 2: Tin tức & Sự kiện */}

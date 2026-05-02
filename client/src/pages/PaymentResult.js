@@ -84,12 +84,18 @@ const PaymentResult = () => {
                   {result.success ? '⏳ Chờ xác nhận' : '❌ Thất bại'}
                 </span>
               </div>
-              {result.responseCode && (
+              {result.responseCode && result.method === 'vnpay' && (
                 <div className="flex justify-between items-center py-2">
                   <span className="text-gray-500 text-sm">Mã phản hồi VNPay</span>
                   <span className="font-mono text-sm text-gray-600">{result.responseCode}</span>
                 </div>
               )}
+              <div className="flex justify-between items-center py-2">
+                <span className="text-gray-500 text-sm">Phương thức</span>
+                <span className="font-semibold text-sm text-gray-700">
+                  {result.method === 'momo' ? '💳 MoMo' : result.method === 'vnpay' ? '💳 VNPay' : '💵 Tiền mặt'}
+                </span>
+              </div>
             </div>
           )}
 

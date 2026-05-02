@@ -1,11 +1,84 @@
 // Sports Booking Server
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const path = require('path');
+
+// ── Socket.IO Setup ──
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: (origin, callback) => {
+      // Cho phép tất cả origins giống CORS config bên dưới
+      if (!origin) return callback(null, true);
+      const allowedPatterns = [
+        process.env.CLIENT_URL || 'http://localhost:3000',
+        'http://localhost:3000',
+        /^http:\/\/192\.168\.\d+\.\d+:\d+$/,
+        /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,
+        /^https:\/\/.*\.devtunnels\.ms$/,
+      ];
+      const isAllowed = allowedPatterns.some(p =>
+        typeof p === 'string' ? p === origin : p.test(origin)
+      );
+      callback(null, isAllowed);
+    },
+    credentials: true
+  }
+});
+
+// Export io globally so routes can emit events
+global.io = io;
+
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  // Client joins a facility+date room to receive slot updates
+  socket.on('join-facility', ({ facilityId, date }) => {
+    if (facilityId && date) {
+      const room = `facility:${facilityId}:${date}`;
+      socket.join(room);
+    }
+  });
+
+  // Client leaves a facility+date room
+  socket.on('leave-facility', ({ facilityId, date }) => {
+    if (facilityId && date) {
+      const room = `facility:${facilityId}:${date}`;
+      socket.leave(room);
+    }
+  });
+
+  // ── Group Chat rooms ──
+  socket.on('join-group', ({ groupId }) => {
+    if (groupId) {
+      socket.join(`group:${groupId}`);
+    }
+  });
+
+  socket.on('leave-group', ({ groupId }) => {
+    if (groupId) {
+      socket.leave(`group:${groupId}`);
+    }
+  });
+
+  // ── User notification room ──
+  socket.on('join-user', ({ userId }) => {
+    if (userId) {
+      socket.join(`user:${userId}`);
+    }
+  });
+
+  socket.on('leave-user', ({ userId }) => {
+    if (userId) {
+      socket.leave(`user:${userId}`);
+    }
+  });
+});
 
 // Middleware
 const allowedOrigins = [
@@ -13,6 +86,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   /^http:\/\/192\.168\.\d+\.\d+:\d+$/,  // Cho phép mọi IP LAN 192.168.x.x
   /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,   // Cho phép mọi IP LAN 10.x.x.x
+  /^https:\/\/.*\.devtunnels\.ms$/,     // Cho phép devtunnels
 ];
 
 app.use(cors({
@@ -28,6 +102,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.set('trust proxy', 1); // Dùng req.ip đúng khi behind proxy (dev tunnel, nginx, etc.)
 // Serve uploaded images statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -46,6 +121,8 @@ app.use('/api/payment', require('./routes/payment'));
 app.use('/api/news', require('./routes/news'));
 app.use('/api/slot-views', require('./routes/slotViews'));
 app.use('/api/coupons', require('./routes/coupons'));
+app.use('/api/casual-groups', require('./routes/casualGroup'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Database connection
 const { sequelize, syncDatabase } = require('./models');
@@ -91,6 +168,46 @@ sequelize.authenticate()
     // Chạy mỗi 2 phút
     setInterval(clearPendingBookings, 2 * 60 * 1000);
     clearPendingBookings(); // Chạy ngay lúc start
+
+    // Background Cron: Auto-expire CasualGroup rooms
+    const expireCasualGroups = async () => {
+      try {
+        const { Op } = require('sequelize');
+        const { CasualGroup } = require('./models');
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const currentTime = `${hours}:${minutes}:${seconds}`;
+
+        const expiredGroups = await CasualGroup.findAll({
+          where: {
+            status: { [Op.in]: ['open', 'full'] },
+            [Op.or]: [
+              { date: { [Op.lt]: today } },
+              {
+                date: today,
+                startTime: { [Op.lt]: currentTime }
+              }
+            ]
+          }
+        });
+
+        if (expiredGroups.length > 0) {
+          console.log(`🧹 Found ${expiredGroups.length} expired CasualGroup rooms. Updating status...`);
+          for (const group of expiredGroups) {
+            await group.update({ status: 'expired' });
+          }
+        }
+      } catch (err) {
+        console.error('Error in CasualGroup expiration cron:', err.message);
+      }
+    };
+
+    // Chạy mỗi 10 phút
+    setInterval(expireCasualGroups, 10 * 60 * 1000);
+    expireCasualGroups();
   })
   .catch((err) => {
     console.error('❌ MySQL connection error:', err.message);
@@ -127,6 +244,7 @@ if (servableDir) {
   console.log('📦 Serving React client from:', servableDir);
 }
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🔌 Socket.IO ready for realtime connections`);
 });

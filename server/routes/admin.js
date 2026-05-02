@@ -166,5 +166,57 @@ router.get('/sports', auth, admin, async (req, res) => {
   }
 });
 
+// -- FIND MATE MANAGEMENT --
+
+// Get all find mate posts (for admin)
+router.get('/findmates', auth, admin, async (req, res) => {
+  try {
+    const FindMate = require('../models/FindMate');
+    const FindMateJoin = require('../models/FindMateJoin');
+    const Facility = require('../models/Facility');
+    const findmates = await FindMate.findAll({
+      include: [
+        { model: User, as: 'author', attributes: ['id', 'name', 'email', 'phone'] },
+        { model: Sport, as: 'sport', attributes: ['id', 'name', 'nameVi', 'emoji'] },
+        { model: Facility, as: 'facility', attributes: ['id', 'name', 'address'] },
+        { model: FindMateJoin, as: 'joins', include: [
+          { model: User, as: 'user', attributes: ['id', 'name', 'email', 'phone'] }
+        ]}
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(findmates);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update find mate approval status
+router.put('/findmates/:id/approve', auth, admin, async (req, res) => {
+  try {
+    const { isApproved } = req.body;
+    const FindMate = require('../models/FindMate');
+    
+    const post = await FindMate.findByPk(req.params.id);
+    if (!post) {
+      return res.status(404).json({ message: 'Không tìm thấy bài đăng' });
+    }
+
+    await post.update({ isApproved });
+    
+    // Return updated post
+    const updatedPost = await FindMate.findByPk(req.params.id, {
+      include: [
+        { model: User, as: 'author', attributes: ['id', 'name', 'email', 'phone'] },
+        { model: Sport, as: 'sport', attributes: ['id', 'name', 'nameVi'] }
+      ]
+    });
+    
+    res.json(updatedPost);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 module.exports = router;
 

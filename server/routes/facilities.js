@@ -4,6 +4,7 @@ const { Sequelize } = require('sequelize');
 const Facility = require('../models/Facility');
 const Sport = require('../models/Sport');
 const Review = require('../models/Review');
+const { auth, admin } = require('../middleware/auth');
 
 // Haversine formula - calculate distance between two GPS points (km)
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -18,24 +19,33 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Advanced search facilities
-// GET /api/facilities/search?sport=1&name=sân&area=quận 1&minPrice=100000&maxPrice=300000&lat=10.78&lng=106.69&sort=distance
+// GET /api/facilities/search
+// ?sport=1&name=san&area=quan+1&minPrice=100000&maxPrice=300000
+// &lat=10.78&lng=106.69&sort=distance|price_asc|price_desc|rating|popularity
 router.get('/search', async (req, res) => {
     try {
         const { Op } = require('sequelize');
         const { sport, name, area, minPrice, maxPrice, lat, lng, sort } = req.query;
 
-        // Build WHERE conditions
+        // Build WHERE conditions — KHÔNG lọc status ở đây để khớp GET /facilities (sidebar đếm + danh sách cùng nguồn).
+        // Trước đây chỉ search active nên DB có inactive/null → sidebar vẫn đếm nhưng kết quả tìm rỗng.
         const where = {};
 
         if (sport) {
             where.sportId = parseInt(sport);
         }
 
+        // Combined text search: name OR address
         if (name) {
-            where.name = { [Op.like]: `%${name}%` };
+            const term = name.trim();
+            where[Op.or] = [
+                { name: { [Op.like]: `%${term}%` } },
+                { address: { [Op.like]: `%${term}%` } },
+            ];
         }
 
-        if (area) {
+        // area is now a secondary filter combined with name search
+        if (area && !name) {
             where.address = { [Op.like]: `%${area}%` };
         }
 
@@ -45,37 +55,58 @@ router.get('/search', async (req, res) => {
             if (maxPrice) where.pricePerHour[Op.lte] = parseFloat(maxPrice);
         }
 
+        // Include sport + reviews for aggregated rating
         const facilities = await Facility.findAll({
             where,
-            include: [{
-                model: Sport,
-                as: 'sport',
-                attributes: ['id', 'name', 'nameVi']
-            }],
-            order: [['createdAt', 'DESC']]
+            include: [
+                {
+                    model: Sport,
+                    as: 'sport',
+                    attributes: ['id', 'name', 'nameVi', 'emoji']
+                },
+                {
+                    model: Review,
+                    as: 'reviews',
+                    attributes: []
+                }
+            ],
+            attributes: {
+                include: [
+                    [Sequelize.fn('AVG', Sequelize.col('reviews.rating')), 'avgRating'],
+                    [Sequelize.fn('COUNT', Sequelize.col('reviews.id')), 'reviewCount']
+                ]
+            },
+            group: ['Facility.id', 'sport.id'],
+            order: [['createdAt', 'DESC']],
+            subQuery: false
         });
 
-        // Add distance if user provided coordinates
+        // Map results and add distance if needed
         let results = facilities.map(f => {
             const facility = f.toJSON();
+            // Normalize rating
+            facility.avgRating = facility.avgRating ? parseFloat(facility.avgRating) : 0;
+            facility.reviewCount = parseInt(facility.reviewCount) || 0;
+
             if (lat && lng && facility.latitude && facility.longitude) {
                 facility.distance = Math.round(
                     haversineDistance(parseFloat(lat), parseFloat(lng), facility.latitude, facility.longitude) * 10
-                ) / 10; // Round to 1 decimal
+                ) / 10;
             }
             return facility;
         });
 
         // Sort results
         if (sort === 'price_asc') {
-            results.sort((a, b) => a.pricePerHour - b.pricePerHour);
+            results.sort((a, b) => Number(a.pricePerHour) - Number(b.pricePerHour));
         } else if (sort === 'price_desc') {
-            results.sort((a, b) => b.pricePerHour - a.pricePerHour);
+            results.sort((a, b) => Number(b.pricePerHour) - Number(a.pricePerHour));
         } else if (sort === 'distance' && lat && lng) {
-            results.sort((a, b) => (a.distance || 999) - (b.distance || 999));
-        } else if (sort === 'name') {
-            results.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+            results.sort((a, b) => (a.distance ?? 999) - (b.distance ?? 999));
+        } else if (sort === 'rating') {
+            results.sort((a, b) => b.avgRating - a.avgRating);
         }
+        // Default: sort by createdAt DESC (most recent first)
 
         res.json(results);
     } catch (error) {
@@ -218,7 +249,7 @@ router.get('/sport/:sportId', async (req, res) => {
 });
 
 // Create facility (admin only)
-router.post('/', async (req, res) => {
+router.post('/', auth, admin, async (req, res) => {
     try {
         console.log('Received facility data:', req.body);
         const facility = await Facility.create(req.body);
@@ -240,7 +271,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update facility (admin only)
-router.put('/:id', async (req, res) => {
+router.put('/:id', auth, admin, async (req, res) => {
     try {
         const facility = await Facility.findByPk(req.params.id);
 
@@ -266,7 +297,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete facility (admin only)
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', auth, admin, async (req, res) => {
     try {
         const facility = await Facility.findByPk(req.params.id);
 
