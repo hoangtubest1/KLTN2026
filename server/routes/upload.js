@@ -28,10 +28,16 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB
 
-// POST /api/upload/image
+// POST /api/upload/image — Admin only
 router.post('/image', auth, admin, upload.single('image'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Không có file nào được tải lên' });
-    // Đường dẫn tương đối — tránh lưu localhost vào DB (lỗi ảnh trên production)
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url, filename: req.file.filename });
+});
+
+// POST /api/upload/owner-doc — Authenticated user (for owner registration docs)
+router.post('/owner-doc', auth, upload.single('image'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Không có file nào được tải lên' });
     const url = `/uploads/${req.file.filename}`;
     res.json({ url, filename: req.file.filename });
 });

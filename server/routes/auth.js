@@ -7,6 +7,9 @@ const crypto = require('crypto');
 const { JWT_SECRET } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../utils/emailService');
 const { loginLimiter, otpRequestLimiter, otpVerifyLimiter, registerLimiter } = require('../middleware/rateLimit');
+const { OAuth2Client } = require('google-auth-library');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -54,7 +57,8 @@ router.post('/register', registerLimiter, [
         name: user.name,
         email: user.email,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        ownerStatus: user.ownerStatus
       }
     });
   } catch (error) {
@@ -100,7 +104,8 @@ router.post('/login', loginLimiter, [
         name: user.name,
         email: user.email,
         phone: user.phone,
-        role: user.role
+        role: user.role,
+        ownerStatus: user.ownerStatus
       }
     });
   } catch (error) {
@@ -310,5 +315,190 @@ router.post('/reset-password', [
   }
 });
 
+// @route   POST /api/auth/google
+// @desc    Login/Register with Google
+// @access  Public
+router.post('/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({ message: 'Thiếu thông tin xác thực Google' });
+    }
+
+    // Verify Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Không thể lấy email từ tài khoản Google' });
+    }
+
+    // Find user by googleId or email
+    let user = await User.findOne({ where: { googleId } });
+
+    if (!user) {
+      // Check if user with same email exists (registered with email/password before)
+      user = await User.findOne({ where: { email: email.toLowerCase().trim() } });
+
+      if (user) {
+        // Link Google account to existing user
+        await user.update({ googleId, avatar: user.avatar || picture });
+      } else {
+        // Create new user
+        user = await User.create({
+          name,
+          email: email.toLowerCase().trim(),
+          phone: '',
+          googleId,
+          avatar: picture,
+          password: null,
+        });
+      }
+    } else {
+      // Update avatar if changed
+      if (picture && user.avatar !== picture) {
+        await user.update({ avatar: picture });
+      }
+    }
+
+    // Generate token
+    const token = generateToken(user.id);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        avatar: user.avatar,
+      }
+    });
+  } catch (error) {
+    console.error('Google login error:', error);
+    if (error.message?.includes('Token used too late') || error.message?.includes('Invalid token')) {
+      return res.status(401).json({ message: 'Token Google không hợp lệ hoặc đã hết hạn' });
+    }
+    res.status(500).json({ message: 'Lỗi server khi đăng nhập bằng Google' });
+  }
+});
+
+// @route   POST /api/auth/register-owner
+// @desc    Register as facility owner (requires admin approval)
+// @access  Public
+router.post('/register-owner', registerLimiter, [
+  body('name').notEmpty().withMessage('Tên là bắt buộc'),
+  body('email').isEmail().withMessage('Email không hợp lệ'),
+  body('phone').notEmpty().withMessage('Số điện thoại là bắt buộc'),
+  body('password').isLength({ min: 6 }).withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+  body('businessLicense').notEmpty().withMessage('Giấy phép kinh doanh là bắt buộc'),
+  body('idCardFront').notEmpty().withMessage('Ảnh CCCD mặt trước là bắt buộc'),
+  body('idCardBack').notEmpty().withMessage('Ảnh CCCD mặt sau là bắt buộc'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { name, email, phone, password, businessLicense, idCardFront, idCardBack } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email đã được sử dụng' });
+    }
+
+    // Create new owner user (pending approval)
+    const user = await User.create({
+      name,
+      email,
+      phone,
+      password,
+      role: 'owner',
+      ownerStatus: 'pending',
+      businessLicense: businessLicense || null,
+      idCardFront: idCardFront || null,
+      idCardBack: idCardBack || null
+    });
+
+    const token = generateToken(user.id);
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        ownerStatus: user.ownerStatus
+      },
+      message: 'Đăng ký chủ sân thành công! Tài khoản đang chờ admin duyệt.'
+    });
+  } catch (error) {
+    console.error('Register owner error:', error);
+    res.status(500).json({ message: 'Lỗi server khi đăng ký chủ sân' });
+  }
+});
+
+// @route   POST /api/auth/upgrade-to-owner
+// @desc    Upgrade existing logged-in user to owner role
+// @access  Private (requires auth)
+const { auth } = require('../middleware/auth');
+router.post('/upgrade-to-owner', auth, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id);
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy user' });
+
+    if (user.role === 'owner') {
+      return res.status(400).json({ message: 'Bạn đã đăng ký chủ sân rồi. Trạng thái: ' + user.ownerStatus });
+    }
+
+    const { businessLicense, idCardFront, idCardBack } = req.body;
+
+    if (!businessLicense) {
+      return res.status(400).json({ message: 'Giấy phép kinh doanh là bắt buộc' });
+    }
+    if (!idCardFront) {
+      return res.status(400).json({ message: 'Ảnh CCCD mặt trước là bắt buộc' });
+    }
+    if (!idCardBack) {
+      return res.status(400).json({ message: 'Ảnh CCCD mặt sau là bắt buộc' });
+    }
+
+    await user.update({
+      role: 'owner',
+      ownerStatus: 'pending',
+      businessLicense: businessLicense || null,
+      idCardFront: idCardFront || null,
+      idCardBack: idCardBack || null
+    });
+
+    res.json({
+      message: 'Đăng ký chủ sân thành công! Tài khoản đang chờ admin duyệt.',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        ownerStatus: user.ownerStatus
+      }
+    });
+  } catch (error) {
+    console.error('Upgrade to owner error:', error);
+    res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
 module.exports = router;
+
 

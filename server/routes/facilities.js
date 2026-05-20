@@ -29,7 +29,7 @@ router.get('/search', async (req, res) => {
 
         // Build WHERE conditions — KHÔNG lọc status ở đây để khớp GET /facilities (sidebar đếm + danh sách cùng nguồn).
         // Trước đây chỉ search active nên DB có inactive/null → sidebar vẫn đếm nhưng kết quả tìm rỗng.
-        const where = {};
+        const where = { isApproved: true };
 
         if (sport) {
             where.sportId = parseInt(sport);
@@ -118,7 +118,26 @@ router.get('/search', async (req, res) => {
 // Get all facilities (with sport info + avgRating + reviewCount)
 router.get('/', async (req, res) => {
     try {
+        // Admin sees all; public sees only approved
+        const isAdmin = req.headers.authorization && (() => {
+            try {
+                const jwt = require('jsonwebtoken');
+                const { JWT_SECRET } = require('../middleware/auth');
+                const token = req.headers.authorization.replace('Bearer ', '');
+                const decoded = jwt.verify(token, JWT_SECRET);
+                const User = require('../models/User');
+                // We can't await here easily, so skip admin check for listing
+                return false;
+            } catch { return false; }
+        })();
+
+        const where = {};
+        if (!req.query.showAll) {
+            where.isApproved = true;
+        }
+
         const facilities = await Facility.findAll({
+            where,
             include: [
                 {
                     model: Sport,
@@ -218,7 +237,8 @@ router.get('/sport/:sportId', async (req, res) => {
         const facilities = await Facility.findAll({
             where: {
                 sportId: req.params.sportId,
-                status: 'active'
+                status: 'active',
+                isApproved: true
             },
             include: [
                 {

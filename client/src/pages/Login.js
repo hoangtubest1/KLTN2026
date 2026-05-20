@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
+import api from '../api';
 import './Auth.css';
 
 const Login = () => {
@@ -9,12 +11,18 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, user } = useAuth();
+  const { login, loginWithGoogle, user, updateUser } = useAuth();
   const navigate = useNavigate();
 
+  // Phone update modal state
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [phoneSaving, setPhoneSaving] = useState(false);
+
   useEffect(() => {
-    if (user) navigate('/', { replace: true });
-  }, [user, navigate]);
+    if (user && !showPhoneModal) navigate('/', { replace: true });
+  }, [user, navigate, showPhoneModal]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -34,15 +42,85 @@ const Login = () => {
     setLoading(false);
   };
 
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true);
+    setError('');
+    const result = await loginWithGoogle(credentialResponse.credential);
+    if (result.success) {
+      if (!result.user?.phone) {
+        setShowPhoneModal(true);
+      } else {
+        navigate('/');
+      }
+    } else {
+      setError(result.message);
+    }
+    setLoading(false);
+  };
+
+  const handlePhoneSubmit = async () => {
+    if (!phoneNumber.trim()) {
+      setPhoneError('Vui lòng nhập số điện thoại');
+      return;
+    }
+    const phoneRegex = /^(0[0-9]{9,10})$/;
+    if (!phoneRegex.test(phoneNumber.trim())) {
+      setPhoneError('Số điện thoại không hợp lệ');
+      return;
+    }
+    setPhoneSaving(true);
+    setPhoneError('');
+    try {
+      const res = await api.put('/auth/profile', { phone: phoneNumber.trim() });
+      updateUser(res.data.user);
+      setShowPhoneModal(false);
+      navigate('/');
+    } catch (err) {
+      setPhoneError(err.response?.data?.message || 'Lỗi cập nhật số điện thoại');
+    }
+    setPhoneSaving(false);
+  };
+
+  const handlePhoneSkip = () => {
+    setShowPhoneModal(false);
+    navigate('/');
+  };
+
   return (
     <div className="auth-page">
+      {/* Phone Update Modal */}
+      {showPhoneModal && (
+        <div className="phone-modal-overlay">
+          <div className="phone-modal">
+            <div className="phone-modal-icon">📱</div>
+            <h3>Cập nhật số điện thoại</h3>
+            <p>Vui lòng nhập số điện thoại để hoàn tất đăng ký và nhận thông báo đặt sân.</p>
+            {phoneError && <div className="phone-modal-error">{phoneError}</div>}
+            <div className="phone-modal-input-wrap">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+              <input
+                type="tel"
+                placeholder="VD: 0901234567"
+                value={phoneNumber}
+                onChange={(e) => { setPhoneNumber(e.target.value); setPhoneError(''); }}
+                autoFocus
+              />
+            </div>
+            <button className="phone-modal-submit" onClick={handlePhoneSubmit} disabled={phoneSaving}>
+              {phoneSaving ? 'Đang lưu...' : 'Cập nhật'}
+            </button>
+            <button className="phone-modal-skip" onClick={handlePhoneSkip}>
+              Bỏ qua, cập nhật sau
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* LEFT – Branding Panel */}
       <div className="auth-brand">
-        <img
-          src="/football_bg.jpg.jpg"
-          alt=""
-          className="auth-brand-bg"
-        />
+        <img src="/football_bg.jpg.jpg" alt="" className="auth-brand-bg" />
 
         {/* Logo */}
         <div className="auth-brand-logo">
@@ -54,7 +132,7 @@ const Login = () => {
         <h1>
           Đặt sân bóng<br />
           <span>nhanh chóng</span><br />
-          & tiện lợi
+          &amp; tiện lợi
         </h1>
 
         <p className="auth-brand-subtitle">
@@ -209,13 +287,17 @@ const Login = () => {
           </div>
 
           {/* Google */}
-          <button type="button" className="auth-google-btn">
-            <img
-              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-              alt="Google"
+          <div className="auth-google-wrapper">
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={() => setError('Đăng nhập bằng Google thất bại')}
+              text="signin_with"
+              shape="rectangular"
+              size="large"
+              width="100%"
+              locale="vi_VN"
             />
-            Đăng nhập bằng Google
-          </button>
+          </div>
 
           {/* Footer */}
           <p className="auth-footer-link">
@@ -226,7 +308,7 @@ const Login = () => {
           <p className="auth-terms">
             Bằng việc đăng nhập, bạn đồng ý với{' '}
             <Link to="/terms-of-service">Điều khoản dịch vụ</Link> và{' '}
-            <a href="#">Chính sách bảo mật</a>
+            <Link to="/terms-of-service">Chính sách bảo mật</Link>
           </p>
         </div>
       </div>

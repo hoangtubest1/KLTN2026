@@ -4,6 +4,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     PieChart, Pie, Cell, Sector,
 } from 'recharts';
+import * as XLSX from 'xlsx';
 
 
 
@@ -65,6 +66,79 @@ const Statistics = () => {
     const [loading, setLoading] = useState(true);
     const [activeFacility, setActiveFacility] = useState(0);
     const [activeCustomer, setActiveCustomer] = useState(0);
+
+    // Export Excel state
+    const [exportStartDate, setExportStartDate] = useState('');
+    const [exportEndDate, setExportEndDate] = useState('');
+    const [exportStatus, setExportStatus] = useState('all');
+    const [exporting, setExporting] = useState(false);
+
+    const handleExportExcel = async () => {
+        setExporting(true);
+        try {
+            const params = new URLSearchParams();
+            if (exportStartDate) params.append('startDate', exportStartDate);
+            if (exportEndDate) params.append('endDate', exportEndDate);
+            if (exportStatus && exportStatus !== 'all') params.append('status', exportStatus);
+
+            const res = await api.get(`/stats/export-bookings?${params.toString()}`);
+            const data = res.data;
+
+            if (!data || data.length === 0) {
+                alert('Không có dữ liệu để xuất!');
+                return;
+            }
+
+            const statusMap = { pending: 'Chờ xác nhận', confirmed: 'Đã xác nhận', completed: 'Hoàn thành', cancelled: 'Đã hủy' };
+            const paymentMap = { cash: 'Tiền mặt', vnpay: 'VNPay', momo: 'MoMo', bank_transfer: 'Chuyển khoản' };
+            const paymentStatusMap = { pending: 'Chờ thanh toán', paid: 'Đã thanh toán', refunded: 'Đã hoàn tiền' };
+
+            const exportRows = data.map((b, idx) => ({
+                'STT': idx + 1,
+                'Mã đặt': b.id,
+                'Môn thể thao': b.sportName || '',
+                'Tên sân': b.facilityName || '',
+                'Địa chỉ sân': b.facilityAddress || '',
+                'Khách hàng': b.customerName || '',
+                'SĐT': b.customerPhone || '',
+                'Email': b.customerEmail || '',
+                'Ngày đặt': b.date || '',
+                'Giờ bắt đầu': b.startTime || '',
+                'Giờ kết thúc': b.endTime || '',
+                'Thời lượng (phút)': b.duration || '',
+                'Tổng tiền': b.totalPrice || 0,
+                'Giảm giá': b.discountAmount || 0,
+                'Mã giảm giá': b.couponCode || '',
+                'Trạng thái': statusMap[b.status] || b.status,
+                'Phương thức TT': paymentMap[b.paymentMethod] || b.paymentMethod || '',
+                'Trạng thái TT': paymentStatusMap[b.paymentStatus] || b.paymentStatus || '',
+                'Ghi chú': b.notes || '',
+                'Ngày tạo': b.createdAt ? new Date(b.createdAt).toLocaleString('vi-VN') : '',
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+
+            // Auto-size columns
+            const colWidths = Object.keys(exportRows[0]).map(key => {
+                const maxLen = Math.max(
+                    key.length,
+                    ...exportRows.map(row => String(row[key] || '').length)
+                );
+                return { wch: Math.min(maxLen + 2, 40) };
+            });
+            ws['!cols'] = colWidths;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Danh sách đặt sân');
+            const fileName = `ThongKe_DatSan_${exportStartDate || 'all'}_${exportEndDate || 'all'}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        } catch (err) {
+            console.error('Export error:', err);
+            alert('Lỗi khi xuất file Excel. Vui lòng thử lại!');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -371,6 +445,86 @@ const Statistics = () => {
                                 </table>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                {/* Export Excel Section */}
+                <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+                        <div>
+                            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <span className="text-2xl">📥</span> Xuất Báo Cáo Excel
+                            </h2>
+                            <p className="text-xs text-gray-400">Tải dữ liệu đặt sân dạng file Excel (.xlsx)</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Từ ngày</label>
+                            <input
+                                type="date"
+                                value={exportStartDate}
+                                onChange={e => setExportStartDate(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Đến ngày</label>
+                            <input
+                                type="date"
+                                value={exportEndDate}
+                                onChange={e => setExportEndDate(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5">Trạng thái</label>
+                            <select
+                                value={exportStatus}
+                                onChange={e => setExportStatus(e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            >
+                                <option value="all">Tất cả</option>
+                                <option value="pending">Chờ xác nhận</option>
+                                <option value="confirmed">Đã xác nhận</option>
+                                <option value="completed">Hoàn thành</option>
+                                <option value="cancelled">Đã hủy</option>
+                            </select>
+                        </div>
+                        <div className="flex items-end">
+                            <button
+                                onClick={handleExportExcel}
+                                disabled={exporting}
+                                className={`w-full flex items-center justify-center gap-2 px-5 py-2 rounded-lg text-sm font-bold text-white shadow-md transition-all duration-200 ${
+                                    exporting
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-lg active:scale-95'
+                                }`}
+                            >
+                                {exporting ? (
+                                    <>
+                                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Đang xuất...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                        Tải Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700 flex items-start gap-2">
+                        <span className="text-lg leading-none">💡</span>
+                        <span>Để trống ngày sẽ xuất toàn bộ dữ liệu. File Excel bao gồm: thông tin sân, khách hàng, thời gian, giá tiền, trạng thái thanh toán và ghi chú.</span>
                     </div>
                 </div>
 

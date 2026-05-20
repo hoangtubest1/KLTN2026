@@ -74,10 +74,6 @@ const Coupon = sequelize.define('Coupon', {
   timestamps: true,
   indexes: [
     {
-      unique: true,
-      fields: ['code']
-    },
-    {
       fields: ['isActive']
     }
   ]

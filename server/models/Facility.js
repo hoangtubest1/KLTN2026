@@ -26,6 +26,18 @@ const Facility = sequelize.define('Facility', {
         onUpdate: 'CASCADE',
         onDelete: 'CASCADE' // Xóa sport → xóa facilities
     },
+    /** Chủ sân sở hữu facility này (null = admin tạo) */
+    ownerId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+        references: {
+            model: 'users',
+            key: 'id'
+        },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+    },
     phone: {
         type: DataTypes.STRING(20),
         allowNull: false,
@@ -98,6 +110,12 @@ const Facility = sequelize.define('Facility', {
         allowNull: true,
         defaultValue: []
         // Format: [{startTime: "06:00", endTime: "12:00", price: 100000}, ...]
+    },
+    /** Admin phải duyệt sân của chủ sân trước khi hiển thị public */
+    isApproved: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true // Admin-created = auto-approved; Owner route sets false explicitly
     },
     status: {
         type: DataTypes.ENUM('active', 'inactive'),

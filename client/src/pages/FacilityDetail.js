@@ -238,12 +238,19 @@ const FacilityDetail = () => {
     ];
     const rating = facility.avgRating ? parseFloat(facility.avgRating) : 4.8;
     const reviewCount = facility.reviewCount || 0;
-    const priceFrom = facility.pricingSchedule?.length
-        ? Math.min(...facility.pricingSchedule.map(t => Number(t.price)))
+    // Safely parse pricingSchedule — MySQL on cPanel may return it as a JSON string
+    const safePricingSchedule = (() => {
+        let ps = facility.pricingSchedule;
+        if (!ps) return [];
+        if (typeof ps === 'string') { try { ps = JSON.parse(ps); } catch { return []; } }
+        return Array.isArray(ps) ? ps : [];
+    })();
+    const priceFrom = safePricingSchedule.length
+        ? Math.min(...safePricingSchedule.map(t => Number(t.price)))
         : Number(facility.pricePerHour);
     const { days, startPad } = calDays();
-    const slots = selectedDate ? generateSlots(facility.pricingSchedule || []) : [];
-    const pricingTiers = facility.pricingSchedule || [];
+    const slots = selectedDate ? generateSlots(safePricingSchedule) : [];
+    const pricingTiers = safePricingSchedule;
     const selectedDayLabel = selectedDate ? getDayLabel(selectedDate) : '';
     const slotPrice = selectedSlot ? (selectedSlot.price || Number(facility.pricePerHour)) : 0;
     const bookingTotal = slotPrice * 2;

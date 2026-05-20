@@ -4,6 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api';
 import { format } from 'date-fns';
 import AdminCoupons from '../components/AdminCoupons';
+import AdminReviews from '../components/AdminReviews';
+import AdminAIChat from '../components/AdminAIChat';
+
+// Helper: convert relative image path to full URL
+const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+const getImageUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
+  return `${API_BASE}${path}`;
+};
 
 // Helper to extract Google Maps embed src from iframe or URL
 const extractMapSrc = (input) => {
@@ -108,6 +118,14 @@ const AdminDashboard = () => {
   const [findMates, setFindMates] = useState([]);
   const [selectedFindMate, setSelectedFindMate] = useState(null);
 
+  // Owner request management state
+  const [ownerRequests, setOwnerRequests] = useState([]);
+  const [ownerFilter, setOwnerFilter] = useState('pending');
+
+  // Pending facility approval state
+  const [pendingFacilities, setPendingFacilities] = useState([]);
+  const [facilityApprovalFilter, setFacilityApprovalFilter] = useState('pending');
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login');
@@ -129,8 +147,12 @@ const AdminDashboard = () => {
       fetchNewsData();
     } else if (activeTab === 'findmates') {
       fetchFindMateData();
+    } else if (activeTab === 'owners') {
+      fetchOwnerRequests();
+    } else if (activeTab === 'facility-approval') {
+      fetchPendingFacilities();
     }
-  }, [isAuthenticated, user, filters, activeTab]);
+  }, [isAuthenticated, user, filters, activeTab, ownerFilter, facilityApprovalFilter]);
 
   // Fetch provinces when apiVersion changes
   useEffect(() => {
@@ -299,7 +321,7 @@ const AdminDashboard = () => {
       description: facility.description || '',
       pricePerHour: facility.pricePerHour,
       status: facility.status,
-      pricingSchedule: facility.pricingSchedule || [],
+      pricingSchedule: (() => { let ps = facility.pricingSchedule; if (!ps) return []; if (typeof ps === 'string') { try { ps = JSON.parse(ps); } catch { return []; } } return Array.isArray(ps) ? ps : []; })(),
       latitude: facility.latitude || null,
       longitude: facility.longitude || null,
       mapEmbed: facility.mapEmbed || ''
@@ -574,80 +596,115 @@ const AdminDashboard = () => {
     }
   };
 
+  // ---- Owner request handlers ----
+  const fetchOwnerRequests = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/admin/owner-requests?status=${ownerFilter}`);
+      setOwnerRequests(Array.isArray(res.data) ? res.data : []);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching owner requests:', err);
+      setLoading(false);
+    }
+  };
+
+
+
+  const handleOwnerAction = async (userId, ownerStatus, ownerNote = '') => {
+    try {
+      await api.put(`/admin/owner-requests/${userId}`, { ownerStatus, ownerNote });
+      fetchOwnerRequests();
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  // ---- Pending facility approval handlers ----
+  const fetchPendingFacilities = async () => {
+    try {
+      const res = await api.get(`/admin/pending-facilities?filter=${facilityApprovalFilter}`);
+      setPendingFacilities(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error('Error fetching pending facilities:', err);
+      setPendingFacilities([]);
+    }
+  };
+
+  const handleFacilityApproval = async (facilityId, isApproved) => {
+    try {
+      await api.put(`/admin/facilities/${facilityId}/approve`, { isApproved });
+      fetchPendingFacilities();
+    } catch (err) {
+      alert('Lỗi: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
+  const sidebarItems = [
+    { id: 'bookings', icon: '📅', label: 'Đặt Sân' },
+    { id: 'facilities', icon: '🏟️', label: 'Sân Bãi' },
+    { id: 'users', icon: '👥', label: 'Người Dùng' },
+    { id: 'owners', icon: '🏠', label: 'Duyệt Chủ Sân' },
+    { id: 'facility-approval', icon: '✅', label: 'Duyệt Sân Bãi' },
+    { id: 'news', icon: '📰', label: 'Tin Tức' },
+    { id: 'findmates', icon: '🤝', label: 'Tìm Bạn' },
+    { id: 'coupons', icon: '🏷️', label: 'Mã Giảm Giá' },
+    { id: 'reviews', icon: '⭐', label: 'Đánh Giá' },
+    { id: 'ai-chat', icon: '🤖', label: 'AI Hỗ Trợ' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600">Xin chào, <span className="font-semibold text-blue-600">{user?.name}</span></p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 flex">
+      {/* ═══ SIDEBAR ═══ */}
+      <aside className="w-56 bg-white border-r border-gray-200 shadow-sm flex flex-col fixed top-0 left-0 h-screen z-40 pt-16">
+        {/* Logo / Title */}
+        <div className="px-5 py-5 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            ⚙️ Admin
+          </h2>
+          <p className="text-xs text-gray-400 mt-1 truncate">Xin chào, {user?.name}</p>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-lg shadow-md mb-6 p-1 flex gap-2 flex-wrap">
-          <button
-            onClick={() => setActiveTab('bookings')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'bookings'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
+        {/* Nav Items */}
+        <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto">
+          {sidebarItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeTab === item.id
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
-          >
-            📅 Quản Lý Đặt Sân
-          </button>
-          <button
-            onClick={() => setActiveTab('facilities')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'facilities'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            🏟️ Quản Lý Sân
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'users'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            👥 Quản Lý Người Dùng
-          </button>
-          <button
-            onClick={() => setActiveTab('news')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'news'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            📰 Quản Lý Tin Tức
-          </button>
-          <button
-            onClick={() => setActiveTab('findmates')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'findmates'
-              ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            🤝 Quản Lý Tìm Bạn
-          </button>
-          <button
-            onClick={() => setActiveTab('coupons')}
-            className={`flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm ${activeTab === 'coupons'
-              ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-lg'
-              : 'text-gray-600 hover:bg-gray-100'
-              }`}
-          >
-            🏷️ Mã Giảm Giá
-          </button>
+            >
+              <span className="text-base">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Bottom */}
+        <div className="p-3 border-t border-gray-100">
           <button
             onClick={() => navigate('/statistics')}
-            className="flex-1 py-3 px-4 rounded-lg font-semibold transition-all duration-300 text-sm text-gray-600 hover:bg-gray-100 border-2 border-dashed border-indigo-300 hover:border-indigo-500 hover:text-indigo-600"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-indigo-600 hover:bg-indigo-50 border border-dashed border-indigo-300 transition-all"
           >
-            📊 Thống Kê & Báo Cáo
+            <span className="text-base">📊</span>
+            <span>Thống Kê</span>
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-gray-600 hover:bg-gray-50 mt-1 transition-all"
+          >
+            <span>←</span>
+            <span>Về trang chủ</span>
           </button>
         </div>
+      </aside>
 
-        {/* Booking Management Tab */}
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="flex-1 ml-56 p-6 lg:p-8 min-h-screen">
+
         {activeTab === 'bookings' && (
           <>
             {/* Statistics */}
@@ -749,10 +806,8 @@ const AdminDashboard = () => {
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Môn Thể Thao</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Sân</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Khách Hàng</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ngày
-                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ngày / Đặt lúc</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Thời Gian</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Đặt Lúc</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tổng Tiền</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ghi Chú</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Trạng Thái</th>
@@ -772,14 +827,12 @@ const AdminDashboard = () => {
                             <div className="font-medium text-gray-900">{booking.customerName}</div>
                             <div className="text-gray-500 text-xs">{booking.customerPhone} | {booking.customerEmail}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {format(new Date(booking.date), 'dd/MM/yyyy')}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="font-medium text-gray-900">{format(new Date(booking.date), 'dd/MM/yyyy')}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">Đặt lúc: {booking.createdAt ? format(new Date(booking.createdAt), 'HH:mm dd/MM') : '—'}</div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             {booking.startTime} - {booking.endTime}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">
-                            {booking.createdAt ? format(new Date(booking.createdAt), 'HH:mm dd/MM/yyyy') : '—'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
                             {booking.totalPrice?.toLocaleString('vi-VN')}đ
@@ -1672,7 +1725,7 @@ const AdminDashboard = () => {
                       {facilityForm.image && (
                         <div className="relative mb-3 rounded-xl overflow-hidden border border-gray-200 w-full h-40">
                           <img
-                            src={facilityForm.image}
+                            src={getImageUrl(facilityForm.image)}
                             alt="preview"
                             className="w-full h-full object-cover"
                             onError={e => { e.target.style.display = 'none'; }}
@@ -1836,7 +1889,6 @@ const AdminDashboard = () => {
             )}
           </>
         )}
-      </div>
 
       {/* News Management Tab */}
       {activeTab === 'news' && (
@@ -1878,7 +1930,7 @@ const AdminDashboard = () => {
                       <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3">
                           {item.image ? (
-                            <img src={item.image} alt={item.title} className="w-14 h-10 object-cover rounded-lg" />
+                            <img src={getImageUrl(item.image)} alt={item.title} className="w-14 h-10 object-cover rounded-lg" />
                           ) : (
                             <div className="w-14 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 text-xl">📰</div>
                           )}
@@ -1927,7 +1979,7 @@ const AdminDashboard = () => {
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Ảnh bìa</label>
                     {newsForm.image && (
-                      <img src={newsForm.image} alt="preview" className="w-full h-40 object-cover rounded-lg mb-2" />
+                      <img src={getImageUrl(newsForm.image)} alt="preview" className="w-full h-40 object-cover rounded-lg mb-2" />
                     )}
                     <div className="flex gap-2 items-center">
                       <input
@@ -2005,6 +2057,195 @@ const AdminDashboard = () => {
       {activeTab === 'coupons' && (
         <AdminCoupons />
       )}
+
+      {/* Reviews Tab */}
+      {activeTab === 'reviews' && (
+        <AdminReviews />
+      )}
+
+      {/* AI Chat Tab */}
+      {activeTab === 'ai-chat' && (
+        <AdminAIChat />
+      )}
+
+      {/* Owners Tab */}
+      {activeTab === 'owners' && (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">🏠 Yêu cầu đăng ký Chủ Sân</h2>
+            <div className="flex gap-2">
+              {['pending', 'approved', 'rejected', 'all'].map(st => (
+                <button key={st} onClick={() => setOwnerFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${ownerFilter === st ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'}`}>
+                  {st === 'pending' ? 'Chờ duyệt' : st === 'approved' ? 'Đã duyệt' : st === 'rejected' ? 'Từ chối' : 'Tất cả'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {ownerRequests.length === 0 ? (
+            <div className="bg-white rounded-xl p-12 text-center shadow-sm">
+              <p className="text-gray-400 text-lg">Không có yêu cầu nào</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {ownerRequests.map(owner => (
+                <div key={owner.id} className="bg-white rounded-xl shadow-sm border p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-4">
+                      <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center text-lg font-bold text-orange-600">
+                        {owner.name?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{owner.name}</h3>
+                        <p className="text-sm text-gray-500">{owner.email} • {owner.phone}</p>
+                        <p className="text-xs text-gray-400 mt-1">Đăng ký: {new Date(owner.createdAt).toLocaleDateString('vi-VN')}</p>
+                        {owner.ownerNote && (
+                          <p className="text-xs text-blue-600 mt-1 italic">Ghi chú: {owner.ownerNote}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        owner.ownerStatus === 'pending' ? 'bg-yellow-100 text-yellow-700'
+                        : owner.ownerStatus === 'approved' ? 'bg-green-100 text-green-700'
+                        : 'bg-red-100 text-red-600'
+                      }`}>
+                        {owner.ownerStatus === 'pending' ? 'Chờ duyệt' : owner.ownerStatus === 'approved' ? 'Đã duyệt' : 'Từ chối'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Giấy tờ */}
+                  <div className="flex gap-4 mt-4 flex-wrap">
+                    {owner.businessLicense && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500 mb-1">GPKD</p>
+                        <img src={getImageUrl(owner.businessLicense)} alt="GPKD" className="h-20 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+                          onClick={() => window.open(getImageUrl(owner.businessLicense), '_blank')} />
+                      </div>
+                    )}
+                    {owner.idCardFront && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500 mb-1">CCCD trước</p>
+                        <img src={getImageUrl(owner.idCardFront)} alt="CCCD" className="h-20 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+                          onClick={() => window.open(getImageUrl(owner.idCardFront), '_blank')} />
+                      </div>
+                    )}
+                    {owner.idCardBack && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500 mb-1">CCCD sau</p>
+                        <img src={getImageUrl(owner.idCardBack)} alt="CCCD" className="h-20 rounded-lg border cursor-pointer hover:scale-105 transition-transform"
+                          onClick={() => window.open(getImageUrl(owner.idCardBack), '_blank')} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  {owner.ownerStatus === 'pending' && (
+                    <div className="flex gap-2 mt-4 pt-3 border-t">
+                      <button onClick={() => handleOwnerAction(owner.id, 'approved')}
+                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold transition-colors">
+                        ✅ Duyệt
+                      </button>
+                      <button onClick={() => {
+                        const note = window.prompt('Lý do từ chối (tùy chọn):');
+                        handleOwnerAction(owner.id, 'rejected', note || '');
+                      }}
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-semibold transition-colors">
+                        ❌ Từ chối
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Facility Approval Tab */}
+      {activeTab === 'facility-approval' && (
+        <div>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              ✅ Duyệt Sân Bãi
+            </h2>
+            <div className="flex gap-2">
+              {['pending', 'approved', 'all'].map(st => (
+                <button key={st} onClick={() => setFacilityApprovalFilter(st)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${facilityApprovalFilter === st ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'}`}>
+                  {st === 'pending' ? '⏳ Chờ duyệt' : st === 'approved' ? '✅ Đã duyệt' : '📋 Tất cả'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {pendingFacilities.length === 0 ? (
+            <div className="bg-white rounded-xl p-12 text-center border">
+              <p className="text-gray-400 text-lg">Không có sân bãi nào</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingFacilities.map(f => (
+                <div key={f.id} className={`bg-white rounded-xl shadow-sm border p-5 ${!f.isApproved ? 'border-l-4 border-l-amber-400' : 'border-l-4 border-l-green-400'}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="flex gap-4">
+                      {f.image && (
+                        <img src={getImageUrl(f.image)} alt={f.name} className="w-24 h-24 rounded-lg object-cover border" />
+                      )}
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-lg">{f.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">📍 {f.address}</p>
+                        <p className="text-sm text-gray-500">📞 {f.phone}</p>
+                        <p className="text-sm text-gray-500">{f.sport?.emoji} {f.sport?.nameVi} • {new Intl.NumberFormat('vi-VN').format(f.pricePerHour || 0)}đ/h • {f.courtCount || 1} sân</p>
+                        {f.description && <p className="text-xs text-gray-400 mt-1 line-clamp-2">{f.description}</p>}
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className="text-xs text-gray-400">👤 Chủ sân: <strong>{f.owner?.name || 'N/A'}</strong></span>
+                          <span className="text-xs text-gray-400">📧 {f.owner?.email}</span>
+                          <span className="text-xs text-gray-400">📱 {f.owner?.phone}</span>
+                        </div>
+                        <p className="text-xs text-gray-300 mt-1">Tạo: {new Date(f.createdAt).toLocaleDateString('vi-VN')} {new Date(f.createdAt).toLocaleTimeString('vi-VN')}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${f.isApproved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {f.isApproved ? '✅ Đã duyệt' : '⏳ Chờ duyệt'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${f.status === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`}>
+                        {f.status === 'active' ? 'Hoạt động' : 'Tạm ngưng'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!f.isApproved && (
+                    <div className="mt-4 pt-4 border-t flex gap-2">
+                      <button onClick={() => handleFacilityApproval(f.id, true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-all">
+                        ✅ Duyệt sân
+                      </button>
+                      <button onClick={() => { if (window.confirm('Từ chối sân bãi này?')) handleFacilityApproval(f.id, false); }}
+                        className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-semibold hover:bg-red-100 transition-all border border-red-200">
+                        ❌ Từ chối
+                      </button>
+                    </div>
+                  )}
+
+                  {f.isApproved && (
+                    <div className="mt-4 pt-4 border-t">
+                      <button onClick={() => { if (window.confirm('Thu hồi duyệt sân này?')) handleFacilityApproval(f.id, false); }}
+                        className="px-4 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-semibold hover:bg-amber-100 transition-all border border-amber-200">
+                        ⚠️ Thu hồi duyệt
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      </main>
     </div>
   );
 };

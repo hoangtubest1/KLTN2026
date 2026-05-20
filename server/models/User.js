@@ -38,16 +38,11 @@ const User = sequelize.define('User', {
   },
   phone: {
     type: DataTypes.STRING(20),
-    allowNull: false,
-    validate: {
-      notEmpty: {
-        msg: 'Phone is required'
-      }
-    }
+    allowNull: true
   },
   password: {
     type: DataTypes.STRING(255),
-    allowNull: false,
+    allowNull: true,
     validate: {
       len: {
         args: [6, 255],
@@ -55,10 +50,49 @@ const User = sequelize.define('User', {
       }
     }
   },
+  googleId: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    unique: true
+  },
+  avatar: {
+    type: DataTypes.STRING(500),
+    allowNull: true
+  },
   role: {
-    type: DataTypes.ENUM('user', 'admin'),
+    type: DataTypes.ENUM('user', 'owner', 'admin'),
     defaultValue: 'user',
     allowNull: false
+  },
+  /** Giấy phép kinh doanh (ảnh upload) */
+  businessLicense: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null
+  },
+  /** CCCD mặt trước */
+  idCardFront: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null
+  },
+  /** CCCD mặt sau */
+  idCardBack: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null
+  },
+  /** Trạng thái duyệt tài khoản chủ sân */
+  ownerStatus: {
+    type: DataTypes.ENUM('none', 'pending', 'approved', 'rejected'),
+    defaultValue: 'none',
+    allowNull: false
+  },
+  /** Ghi chú từ admin khi duyệt */
+  ownerNote: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: null
   },
   resetPasswordOTP: {
     type: DataTypes.STRING(6),

@@ -17,11 +17,25 @@ const haversineDistance = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
+const getSportGradient = (sportId) => {
+  const gradients = [
+    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+    'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
+    'linear-gradient(135deg, #fccb90 0%, #d57eeb 100%)',
+    'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)',
+  ];
+  return gradients[(sportId || 0) % gradients.length];
+};
+
 const Home = () => {
   const [sports, setSports] = useState([]);
   const [facilities, setFacilities] = useState([]);
   const [news, setNews] = useState([]);
-  const [findMates, setFindMates] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [reviewSlide, setReviewSlide] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -101,11 +115,11 @@ const Home = () => {
       if (sportsRes.data.length > 0) {
         setSearchData(prev => ({ ...prev, sport: sportsRes.data[0].id }));
       }
-      // Fetch casual groups separately (requires auth, may fail for guests)
+      // Fetch teams (limit=3)
       try {
-        const findMateRes = await api.get('/casual-groups?limit=3&upcoming=true');
-        setFindMates(findMateRes.data?.groups || []);
-      } catch (_) { setFindMates([]); }
+        const teamsRes = await api.get('/teams?limit=3');
+        setTeams(teamsRes.data?.teams || []);
+      } catch (_) { setTeams([]); }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -479,50 +493,90 @@ const Home = () => {
           </div>
         </div>
 
-        {/* Section: Group Vãng Lai */}
+        {/* Section: Đội Nhóm */}
         <div className="mb-12">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Group Vãng Lai</h2>
-              <p className="text-sm text-gray-400 mt-0.5">Tạo phòng chơi hoặc nhập mã để tham gia ngay</p>
+              <h2 className="text-xl font-bold text-gray-900">Đội Nhóm Nổi Bật</h2>
+              <p className="text-sm text-gray-400 mt-0.5">Tham gia các đội nhóm thể thao để cùng nhau tập luyện và thi đấu</p>
             </div>
             <button
-              onClick={() => navigate('/casual-group')}
+              onClick={() => navigate('/teams')}
               className="text-sm font-semibold flex items-center gap-1 hover:gap-2 transition-all text-indigo-500"
             >
               Xem tất cả <span>→</span>
             </button>
           </div>
 
-          {findMates.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 border border-dashed rounded-xl border-gray-200">Chưa có phòng nào đang mở.</div>
+          {teams.length === 0 ? (
+            <div className="text-center py-6 text-gray-400 border border-dashed rounded-xl border-gray-200">Chưa có đội nhóm nào hoạt động.</div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {findMates.map(group => {
-                const progPct = Math.min(100, Math.round((group.currentPlayers / group.maxPlayers) * 100));
-                const displayDate = new Date(group.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+              {teams.map(team => {
+                const teamImg = team.image ? resolveMediaUrl(team.image) : null;
+                const memberPct = Math.min(100, Math.round((team.currentMembers / team.maxMembers) * 100));
+                const sportGradient = getSportGradient(team.sportId);
                 return (
-                  <div key={group.id} onClick={() => navigate(`/casual-group/${group.id}`)} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all cursor-pointer border border-gray-100 group flex flex-col">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl" title={group.sport?.nameVi}>{group.sport?.emoji || '⚽'}</span>
-                        <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg font-mono">{group.roomCode}</span>
+                  <div 
+                    key={team.id} 
+                    onClick={() => navigate(`/teams/${team.id}`)} 
+                    className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-pointer border border-gray-100 flex flex-col group"
+                  >
+                    {/* Cover image or gradient */}
+                    <div 
+                      className="h-40 w-full relative flex items-end p-3 bg-cover bg-center"
+                      style={{ 
+                        backgroundImage: teamImg ? `url(${teamImg})` : sportGradient,
+                      }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                      <div className="relative flex justify-between items-center w-full">
+                        <span className="bg-white/20 backdrop-blur-md text-white text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                          {team.sport?.emoji || '⚽'} {team.sport?.nameVi || team.sport?.name}
+                        </span>
+                        <span className="text-[10px] text-white/95 bg-black/40 backdrop-blur-sm px-2.5 py-1 rounded-lg font-bold">
+                          {team.currentMembers} / {team.maxMembers} TV
+                        </span>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-1 uppercase rounded bg-green-100 text-green-700">Đang mở</span>
                     </div>
-                    <h3 className="font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">{group.title}</h3>
-                    <p className="text-xs text-gray-500 mb-4 line-clamp-1">📍 {group.location || group.facility?.name}</p>
-                    <div className="mt-auto">
-                      <div className="flex justify-between text-xs font-semibold text-gray-600 mb-1">
-                        <span>👥 {group.currentPlayers}/{group.maxPlayers}</span>
-                        <span className="text-indigo-500">{displayDate}</span>
+
+                    {/* Content */}
+                    <div className="p-5 flex-1 flex flex-col">
+                      <h3 className="font-bold text-gray-950 text-base line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors">
+                        {team.name}
+                      </h3>
+                      {team.slogan ? (
+                        <p className="text-xs text-gray-500 italic line-clamp-1 mb-3">
+                          "{team.slogan}"
+                        </p>
+                      ) : (
+                        <div className="h-4" />
+                      )}
+                      
+                      <div className="space-y-1 text-xs text-gray-600 mb-4 mt-auto">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-400">👑</span>
+                          <span className="font-semibold text-gray-700">Đội trưởng:</span>
+                          <span className="truncate">{team.captain?.name || 'N/A'}</span>
+                        </div>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${progPct}%` }}></div>
+
+                      {/* Progress bar */}
+                      <div className="mt-auto">
+                        <div className="flex justify-between text-[10px] font-semibold text-gray-400 mb-1">
+                          <span>{memberPct}% đã đầy</span>
+                          <span>Còn {team.maxMembers - team.currentMembers} chỗ</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-indigo-500 rounded-full transition-all duration-500" 
+                            style={{ width: `${memberPct}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                )
+                );
               })}
             </div>
           )}

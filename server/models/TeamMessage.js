@@ -1,17 +1,17 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-const CasualGroupMember = sequelize.define('CasualGroupMember', {
+const TeamMessage = sequelize.define('TeamMessage', {
   id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
   },
-  groupId: {
+  teamId: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: 'casual_groups',
+      model: 'teams',
       key: 'id'
     },
     onUpdate: 'CASCADE',
@@ -27,26 +27,20 @@ const CasualGroupMember = sequelize.define('CasualGroupMember', {
     onUpdate: 'CASCADE',
     onDelete: 'CASCADE'
   },
-  isHost: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-    allowNull: false
-  },
-  joinedAt: {
-    type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW
+  message: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Nội dung tin nhắn không thể bỏ trống' }
+    }
   }
 }, {
-  tableName: 'casual_group_members',
+  tableName: 'team_messages',
   timestamps: true,
   indexes: [
-    { fields: ['groupId'] },
-    { fields: ['userId'] },
-    {
-      unique: true,
-      fields: ['groupId', 'userId'] // Mỗi user chỉ join 1 lần/phòng
-    }
+    { fields: ['teamId'] },
+    { fields: ['userId'] }
   ]
 });
 
-module.exports = CasualGroupMember;
+module.exports = TeamMessage;

@@ -66,13 +66,29 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('token');
   };
 
+  const loginWithGoogle = async (credential) => {
+    try {
+      const response = await api.post('/auth/google', { credential });
+      const { token: newToken, user: userData } = response.data;
+      setToken(newToken);
+      setUser(userData);
+      localStorage.setItem('token', newToken);
+      return { success: true, user: userData };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Đăng nhập bằng Google thất bại'
+      };
+    }
+  };
+
   // Allow components to update user data (e.g. after profile update)
   const updateUser = (updatedUser) => {
     setUser(updatedUser);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, register, logout, updateUser, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

@@ -132,12 +132,14 @@ const Navbar = () => {
             </div>
 
             {isAuthenticated && (
-              <Link
-                to="/casual-group"
-                className="text-gray-500 hover:text-indigo-600 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm flex items-center gap-1"
-              >
-                Group <span className="flex h-2 w-2 relative -top-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span></span>
-              </Link>
+              <>
+                <Link
+                  to="/teams"
+                  className="text-gray-500 hover:text-indigo-600 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm flex items-center gap-1"
+                >
+                  Đội Nhóm
+                </Link>
+              </>
             )}
 
             <Link
@@ -222,6 +224,14 @@ const Navbar = () => {
                     className="text-gray-500 hover:text-gray-900 px-3 py-1.5 rounded-lg transition-all duration-200 text-sm font-medium"
                   >
                     Quản Lý
+                  </Link>
+                )}
+                {user?.role === 'owner' && user?.ownerStatus === 'approved' && (
+                  <Link
+                    to="/owner-dashboard"
+                    className="text-orange-500 hover:text-orange-600 px-3 py-1.5 rounded-lg transition-all duration-200 text-sm font-medium"
+                  >
+                    🏟️ Quản Lý Sân
                   </Link>
                 )}
                 <Link
@@ -328,10 +338,11 @@ const Navbar = () => {
             </div>
 
             {isAuthenticated && (
-              <Link to="/casual-group" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between">
-                <span>Group Vãng Lai</span>
-                <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">MỚI</span>
-              </Link>
+              <>
+                <Link to="/teams" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between">
+                  <span>Đội Nhóm</span>
+                </Link>
+              </>
             )}
 
             <Link to="/news" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-4 py-2.5 rounded-lg text-sm font-medium">
@@ -355,6 +366,11 @@ const Navbar = () => {
                   {user?.role === 'admin' && (
                     <Link to="/admin" onClick={toggleMobileMenu} className="block text-gray-600 hover:text-gray-900 hover:bg-gray-50 px-4 py-2.5 rounded-lg text-sm font-medium">
                       Quản Lý
+                    </Link>
+                  )}
+                  {user?.role === 'owner' && user?.ownerStatus === 'approved' && (
+                    <Link to="/owner-dashboard" onClick={toggleMobileMenu} className="block text-orange-500 hover:text-orange-600 hover:bg-orange-50 px-4 py-2.5 rounded-lg text-sm font-medium">
+                      🏟️ Quản Lý Sân
                     </Link>
                   )}
                   <button onClick={() => { logout(); toggleMobileMenu(); }} className="w-full text-left text-red-500 hover:text-red-600 hover:bg-red-50 px-4 py-2.5 rounded-lg text-sm font-medium mt-1">

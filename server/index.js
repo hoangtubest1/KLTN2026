@@ -3,11 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const path = require('path');
 
 // ── Socket.IO Setup ──
 const server = http.createServer(app);
@@ -53,16 +53,16 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ── Group Chat rooms ──
-  socket.on('join-group', ({ groupId }) => {
-    if (groupId) {
-      socket.join(`group:${groupId}`);
+  // ── Team Chat rooms ──
+  socket.on('join-team', ({ teamId }) => {
+    if (teamId) {
+      socket.join(`team:${teamId}`);
     }
   });
 
-  socket.on('leave-group', ({ groupId }) => {
-    if (groupId) {
-      socket.leave(`group:${groupId}`);
+  socket.on('leave-team', ({ teamId }) => {
+    if (teamId) {
+      socket.leave(`team:${teamId}`);
     }
   });
 
@@ -84,6 +84,7 @@ io.on('connection', (socket) => {
 const allowedOrigins = [
   process.env.CLIENT_URL || 'http://localhost:3000',
   'http://localhost:3000',
+  'http://localhost:5000',
   /^http:\/\/192\.168\.\d+\.\d+:\d+$/,  // Cho phép mọi IP LAN 192.168.x.x
   /^http:\/\/10\.\d+\.\d+\.\d+:\d+$/,   // Cho phép mọi IP LAN 10.x.x.x
   /^https:\/\/.*\.devtunnels\.ms$/,     // Cho phép devtunnels
@@ -121,8 +122,11 @@ app.use('/api/payment', require('./routes/payment'));
 app.use('/api/news', require('./routes/news'));
 app.use('/api/slot-views', require('./routes/slotViews'));
 app.use('/api/coupons', require('./routes/coupons'));
-app.use('/api/casual-groups', require('./routes/casualGroup'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/owner', require('./routes/owner'));
+app.use('/api/owner', require('./routes/ownerAI'));
+app.use('/api/admin', require('./routes/adminChat'));
+app.use('/api/teams', require('./routes/teams'));
 
 // Database connection
 const { sequelize, syncDatabase } = require('./models');
@@ -132,8 +136,9 @@ sequelize.authenticate()
   .then(() => {
     console.log('✅ MySQL connection established successfully');
 
-    const syncOptions = { alter: true };
-    if (syncOptions.alter) {
+    const shouldAlter = process.env.DB_ALTER === 'true';
+    const syncOptions = shouldAlter ? { alter: true } : {};
+    if (shouldAlter) {
       console.log('⚠️ Running with ALTER mode - will modify tables to match models');
     }
     return syncDatabase(syncOptions);
@@ -169,45 +174,6 @@ sequelize.authenticate()
     setInterval(clearPendingBookings, 2 * 60 * 1000);
     clearPendingBookings(); // Chạy ngay lúc start
 
-    // Background Cron: Auto-expire CasualGroup rooms
-    const expireCasualGroups = async () => {
-      try {
-        const { Op } = require('sequelize');
-        const { CasualGroup } = require('./models');
-        const now = new Date();
-        const today = now.toISOString().split('T')[0];
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-        const currentTime = `${hours}:${minutes}:${seconds}`;
-
-        const expiredGroups = await CasualGroup.findAll({
-          where: {
-            status: { [Op.in]: ['open', 'full'] },
-            [Op.or]: [
-              { date: { [Op.lt]: today } },
-              {
-                date: today,
-                startTime: { [Op.lt]: currentTime }
-              }
-            ]
-          }
-        });
-
-        if (expiredGroups.length > 0) {
-          console.log(`🧹 Found ${expiredGroups.length} expired CasualGroup rooms. Updating status...`);
-          for (const group of expiredGroups) {
-            await group.update({ status: 'expired' });
-          }
-        }
-      } catch (err) {
-        console.error('Error in CasualGroup expiration cron:', err.message);
-      }
-    };
-
-    // Chạy mỗi 10 phút
-    setInterval(expireCasualGroups, 10 * 60 * 1000);
-    expireCasualGroups();
   })
   .catch((err) => {
     console.error('❌ MySQL connection error:', err.message);

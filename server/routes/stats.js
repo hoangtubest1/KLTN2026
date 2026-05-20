@@ -256,4 +256,94 @@ router.get('/booking-status', auth, admin, async (req, res) => {
     }
 });
 
+// GET /api/stats/export-bookings - get all bookings for export (with optional date filters)
+router.get('/export-bookings', auth, admin, async (req, res) => {
+    try {
+        const { startDate, endDate, status } = req.query;
+        const where = {};
+
+        if (startDate && endDate) {
+            where.date = { [Op.between]: [startDate, endDate] };
+        } else if (startDate) {
+            where.date = { [Op.gte]: startDate };
+        } else if (endDate) {
+            where.date = { [Op.lte]: endDate };
+        }
+
+        if (status && status !== 'all') {
+            where.status = status;
+        }
+
+        const Sport = require('../models/Sport');
+        const bookings = await Booking.findAll({
+            where,
+            include: [{ model: Sport, as: 'sport', attributes: ['name', 'nameVi'] }],
+            order: [['date', 'DESC'], ['startTime', 'ASC']],
+            raw: false,
+        });
+
+        res.json(bookings.map(b => {
+            const plain = b.toJSON();
+            return {
+                id: plain.id,
+                sportName: plain.sport?.nameVi || plain.sport?.name || '',
+                facilityName: plain.facilityName,
+                facilityAddress: plain.facilityAddress || '',
+                customerName: plain.customerName,
+                customerPhone: plain.customerPhone,
+                customerEmail: plain.customerEmail,
+                date: plain.date,
+                startTime: plain.startTime,
+                endTime: plain.endTime,
+                duration: plain.duration,
+                totalPrice: plain.totalPrice,
+                discountAmount: plain.discountAmount || 0,
+                couponCode: plain.couponCode || '',
+                status: plain.status,
+                paymentMethod: plain.paymentMethod,
+                paymentStatus: plain.paymentStatus,
+                notes: plain.notes || '',
+                createdAt: plain.createdAt,
+            };
+        }));
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// GET /api/stats/revenue-daily - daily revenue for a month (for line chart)
+router.get('/revenue-daily', auth, admin, async (req, res) => {
+    try {
+        const { year, month } = req.query;
+        const y = year ? parseInt(year) : new Date().getFullYear();
+        const m = month ? parseInt(month) : new Date().getMonth() + 1;
+
+        const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+        const endDate = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
+        const rows = await Booking.findAll({
+            attributes: [
+                [fn('DATE', col('date')), 'day'],
+                [fn('SUM', col('totalPrice')), 'revenue'],
+                [fn('COUNT', col('id')), 'count'],
+            ],
+            where: {
+                status: { [Op.in]: ['confirmed', 'completed'] },
+                date: { [Op.gte]: startDate, [Op.lt]: endDate },
+            },
+            group: [fn('DATE', col('date'))],
+            order: [[literal('day'), 'ASC']],
+            raw: true,
+        });
+
+        res.json(rows.map(r => ({
+            day: r.day,
+            revenue: parseFloat(r.revenue) || 0,
+            count: parseInt(r.count) || 0,
+        })));
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 module.exports = router;

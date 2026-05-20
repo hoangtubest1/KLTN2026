@@ -40,5 +40,23 @@ const admin = (req, res, next) => {
   }
 };
 
-module.exports = { auth, admin, JWT_SECRET };
+// Check if user is approved owner
+const owner = (req, res, next) => {
+  if (req.user && req.user.role === 'owner' && req.user.ownerStatus === 'approved') {
+    next();
+  } else {
+    res.status(403).json({ message: 'Yêu cầu quyền chủ sân (đã duyệt)' });
+  }
+};
+
+// Check if user is owner OR admin
+const ownerOrAdmin = (req, res, next) => {
+  if (req.user && (req.user.role === 'admin' || (req.user.role === 'owner' && req.user.ownerStatus === 'approved'))) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Yêu cầu quyền chủ sân hoặc admin' });
+  }
+};
+
+module.exports = { auth, admin, owner, ownerOrAdmin, JWT_SECRET };
 

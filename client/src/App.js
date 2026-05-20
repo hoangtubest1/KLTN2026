@@ -1,4 +1,5 @@
 import React from 'react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
@@ -20,15 +21,19 @@ import Statistics from './pages/Statistics';
 import NotFound from './pages/NotFound';
 import Contact from './pages/Contact';
 import OwnerLanding from './pages/OwnerLanding';
+import OwnerDashboard from './pages/OwnerDashboard';
+import RegisterOwner from './pages/RegisterOwner';
 import AdminRoute from './components/AdminRoute';
+import OwnerRoute from './components/OwnerRoute';
 import ChatBot from './components/ChatBot';
 import PaymentResult from './pages/PaymentResult';
+import News from './pages/News';
 import NewsDetail from './pages/NewsDetail';
-import FindMate from './pages/CasualGroup';
-import FindMateDetail from './pages/CasualGroupDetail';
-import FindMateCreate from './pages/CasualGroupCreate';
-import MyFindMate from './pages/MyCasualGroups';
 import Notifications from './pages/Notifications';
+import Teams from './pages/Teams';
+import TeamDetail from './pages/TeamDetail';
+import TeamCreate from './pages/TeamCreate';
+import MyTeams from './pages/MyTeams';
 // import InstallPrompt from './components/InstallPrompt';
 import MobileNavBar from './components/MobileNavBar';
 import ScrollToTop from './components/ScrollToTop';
@@ -121,45 +126,47 @@ function AppContent() {
           />
           <Route path="/contact" element={<Contact />} />
           <Route path="/owner" element={<OwnerLanding />} />
+          <Route path="/register-owner" element={<RegisterOwner />} />
+          <Route
+            path="/owner-dashboard"
+            element={
+              <OwnerRoute>
+                <OwnerDashboard />
+              </OwnerRoute>
+            }
+          />
           <Route path="/payment/result" element={<PaymentResult />} />
+          <Route path="/news" element={<News />} />
           <Route path="/news/:id" element={<NewsDetail />} />
           <Route
-            path="/casual-group"
+            path="/teams"
             element={
               <ProtectedRoute>
-                <FindMate />
+                <Teams />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/casual-group/:id"
+            path="/teams/create"
             element={
               <ProtectedRoute>
-                <FindMateDetail />
+                <TeamCreate />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/casual-group/join/:roomCode"
+            path="/teams/:id"
             element={
               <ProtectedRoute>
-                <FindMateDetail />
+                <TeamDetail />
               </ProtectedRoute>
             }
           />
           <Route
-            path="/casual-group/create"
+            path="/my-teams"
             element={
               <ProtectedRoute>
-                <FindMateCreate />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/my-casual-groups"
-            element={
-              <ProtectedRoute>
-                <MyFindMate />
+                <MyTeams />
               </ProtectedRoute>
             }
           />
@@ -185,15 +192,17 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <SocketProvider>
-        <NotificationProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </NotificationProvider>
-      </SocketProvider>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId="324369327781-o8fmjbfulqahquvtf34pu7qgm8qd1p6t.apps.googleusercontent.com">
+      <AuthProvider>
+        <SocketProvider>
+          <NotificationProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </NotificationProvider>
+        </SocketProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 

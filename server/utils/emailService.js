@@ -56,16 +56,25 @@ const sendViaResend = async (to, subject, html) => {
   return data;
 };
 
-// Unified email sender - uses Resend API if available, otherwise SMTP
+// Unified email sender - tries Resend API first, falls back to SMTP if Resend fails
 const sendEmail = async (to, subject, html) => {
+  // Try Resend API first if configured
   if (process.env.RESEND_API_KEY) {
-    console.log(`📧 Sending email via Resend API to: ${to}`);
-    const result = await sendViaResend(to, subject, html);
-    console.log(`✅ Email sent via Resend:`, result.id);
-    return { success: true, messageId: result.id };
-  } else {
+    try {
+      console.log(`📧 Sending email via Resend API to: ${to}`);
+      const result = await sendViaResend(to, subject, html);
+      console.log(`✅ Email sent via Resend:`, result.id);
+      return { success: true, messageId: result.id };
+    } catch (resendError) {
+      console.warn(`⚠️ Resend API failed: ${resendError.message}`);
+      console.log(`🔄 Falling back to Gmail SMTP...`);
+    }
+  }
+
+  // Fallback to SMTP (Gmail)
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
     const transporter = createTransporter();
-    console.log(`📧 Sending email via SMTP to: ${to} via ${process.env.EMAIL_HOST}:${process.env.EMAIL_PORT}`);
+    console.log(`📧 Sending email via SMTP to: ${to} via ${process.env.EMAIL_HOST || 'smtp.gmail.com'}:${process.env.EMAIL_PORT || 587}`);
     const info = await transporter.sendMail({
       from: process.env.EMAIL_FROM,
       to: to,
@@ -75,6 +84,8 @@ const sendEmail = async (to, subject, html) => {
     console.log('✅ Email sent via SMTP:', info.messageId);
     return { success: true, messageId: info.messageId };
   }
+
+  throw new Error('No email provider available. Configure RESEND_API_KEY or EMAIL_USER/EMAIL_PASSWORD in .env');
 };
 
 // Generate HTML email template for booking confirmation (pending status)

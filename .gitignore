@@ -79,3 +79,10 @@ temp/
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
+
+# Custom ignores for deployment, database, and uploads
+*.zip
+*.sql
+.env.cpanel
+server/uploads/*
+!server/uploads/.gitkeep

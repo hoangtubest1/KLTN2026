@@ -18,7 +18,7 @@ const vnpay = new VNPay({
   tmnCode: process.env.VNPAY_TMN_CODE,
   secureSecret: process.env.VNPAY_HASH_SECRET,
   vnpayHost: 'https://sandbox.vnpayment.vn',
-  testMode: process.env.NODE_ENV !== 'production',
+  testMode: true,  // sandbox mode — đổi thành false khi dùng VNPay production
   hashAlgorithm: 'SHA512',
   loggerFn: ignoreLogger,
 });

@@ -1,164 +1,112 @@
 const express = require('express');
 const router = express.Router();
-const https = require('https');
 const Facility = require('../models/Facility');
 const Sport = require('../models/Sport');
 const Booking = require('../models/Booking');
 const Review = require('../models/Review');
 const { Op, fn, col } = require('sequelize');
+const { GoogleAuth } = require('google-auth-library');
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const XAI_API_KEY = process.env.XAI_API_KEY;
-const GEMINI_TIMEOUT_MS = 15000; // 15 second timeout
-const GROK_TIMEOUT_MS = 20000; // 20 second timeout for Grok
+// Vertex AI Configuration
+const VERTEX_PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'project-b6d82976-1196-4bef-8f6';
+const VERTEX_LOCATION = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+const VERTEX_TIMEOUT_MS = 30000; // 30 second timeout
 
-// ============================================================
-// Direct Gemini REST API call (no SDK - real timeout control)
-// ============================================================
-function callGeminiAPI(systemInstruction, prompt, history = []) {
-    return new Promise((resolve, reject) => {
-        if (!GEMINI_API_KEY) {
-            return reject(new Error('No API key'));
-        }
-
-        // Build messages array for REST API
-        const contents = [
-            ...history.filter(h => h.role && h.content).map(h => ({
-                role: h.role === 'bot' ? 'model' : 'user',
-                parts: [{ text: h.content }]
-            })),
-            { role: 'user', parts: [{ text: prompt }] }
-        ];
-
-        const body = JSON.stringify({
-            system_instruction: {
-                parts: [{ text: systemInstruction }]
-            },
-            contents,
-            generationConfig: {
-                maxOutputTokens: 1200,
-                temperature: 0.6,
-                topP: 0.9,
-                topK: 40
-            }
-        });
-
-        const options = {
-            hostname: 'generativelanguage.googleapis.com',
-            path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(body)
-            },
-            timeout: GEMINI_TIMEOUT_MS
-        };
-
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(data);
-                    if (parsed.error) {
-                        reject(new Error(`Gemini API error: ${parsed.error.message}`));
-                    } else {
-                        const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-                        if (text) {
-                            resolve(text);
-                        } else {
-                            reject(new Error('Empty response from Gemini'));
-                        }
-                    }
-                } catch (e) {
-                    reject(new Error('Failed to parse Gemini response'));
-                }
-            });
-        });
-
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error(`Gemini timeout after ${GEMINI_TIMEOUT_MS}ms`));
-        });
-
-        req.on('error', (err) => {
-            reject(new Error(`Gemini request error: ${err.message}`));
-        });
-
-        req.write(body);
-        req.end();
-    });
-}
+// Google Auth client (auto-refreshes tokens via ADC)
+const auth = new GoogleAuth({
+    scopes: 'https://www.googleapis.com/auth/cloud-platform'
+});
 
 // ============================================================
-// Grok (xAI) REST API call for general questions
+// Vertex AI Gemini API call (with Google Search grounding)
 // ============================================================
-function callGrokAPI(userMessage, history = []) {
-    if (!XAI_API_KEY) {
-        return Promise.reject(new Error('No xAI API key'));
+async function callGeminiAPI(systemInstruction, prompt, history = [], options = {}) {
+    // Get OAuth token via Application Default Credentials
+    const client = await auth.getClient();
+    const tokenResponse = await client.getAccessToken();
+    const accessToken = tokenResponse.token;
+
+    if (!accessToken) {
+        throw new Error('Failed to get access token');
     }
 
-    const messages = [
-        {
-            role: 'system',
-            content: `Bạn là trợ lý AI thông minh tên **Timsan247 AI**, được tích hợp trên hệ thống đặt sân thể thao Timsan247.
-Khi người dùng hỏi câu hỏi ngoài phạm vi đặt sân (ví dụ: kiến thức chung, giải bài tập, tin tức, cuộc sống...), bạn trả lời một cách hữu ích và thân thiện bằng tiếng Việt.
-
-Quy tắc:
-1. Luôn trả lời bằng tiếng Việt (trừ khi khách hỏi tiếng Anh)
-2. Trả lời ngắn gọn, rõ ràng, sử dụng emoji để tạo sự thân thiện
-3. Sử dụng markdown: **in đậm**, bullet points cho danh sách
-4. Cuối câu trả lời, nhẹ nhàng nhắc về dịch vụ đặt sân (1 dòng ngắn)
-5. KHÔNG bao giờ trả lời nội dung bạo lực, phân biệt, chính trị nhạy cảm
-6. Giữ câu trả lời dưới 300 từ`
-        },
+    // Build messages array
+    const contents = [
         ...history.filter(h => h.role && h.content).map(h => ({
-            role: h.role === 'bot' ? 'assistant' : 'user',
-            content: h.content
+            role: h.role === 'bot' ? 'model' : 'user',
+            parts: [{ text: h.content }]
         })),
-        { role: 'user', content: userMessage }
+        { role: 'user', parts: [{ text: prompt }] }
     ];
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GROK_TIMEOUT_MS);
-
-    return fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${XAI_API_KEY}`
+    const requestBody = {
+        system_instruction: {
+            parts: [{ text: systemInstruction }]
         },
-        body: JSON.stringify({
-            model: 'grok-4-1-fast-non-reasoning',
-            messages,
-            max_tokens: 1200,
-            temperature: 0.7
-        }),
-        signal: controller.signal
-    })
-    .then(async (res) => {
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`Grok API error: ${res.status} ${errorText}`);
+        contents,
+        generationConfig: {
+            maxOutputTokens: 4096,
+            temperature: 0.6,
+            topP: 0.9,
+            topK: 40
         }
-        return res.json();
-    })
-    .then(data => {
-        const text = data?.choices?.[0]?.message?.content;
-        if (!text) {
-            throw new Error('Empty response from Grok');
+    };
+
+    // Enable Google Search grounding for out-of-scope / not-found queries
+    if (options.useSearch) {
+        requestBody.tools = [{ googleSearch: {} }];
+        console.log('🔍 Google Search grounding enabled (Vertex AI)');
+    }
+
+    // gemini-2.0-flash is widely available on Vertex AI and supports Google Search
+    const model = 'gemini-2.5-flash';
+    const url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/${model}:generateContent`;
+
+    console.log(`🤖 Calling Vertex AI: ${model} (search: ${!!options.useSearch})`);
+
+    // Make request with timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), VERTEX_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(`Vertex AI error ${response.status}: ${errorData?.error?.message || response.statusText}`);
         }
-        return text;
-    })
-    .catch(err => {
-        clearTimeout(timeoutId);
+
+        const parsed = await response.json();
+
+        // Extract text from all parts (search grounding may return multiple parts)
+        const parts = parsed?.candidates?.[0]?.content?.parts;
+        if (parts && parts.length > 0) {
+            const text = parts.filter(p => p.text).map(p => p.text).join('');
+            if (text) {
+                return text;
+            }
+        }
+        throw new Error('Empty response from Vertex AI');
+    } catch (err) {
+        clearTimeout(timeout);
         if (err.name === 'AbortError') {
-            throw new Error(`Grok timeout after ${GROK_TIMEOUT_MS}ms`);
+            throw new Error(`Vertex AI timeout after ${VERTEX_TIMEOUT_MS}ms`);
         }
-        throw new Error(`Grok request error: ${err.message}`);
-    });
+        throw err;
+    }
 }
+
+
 
 // ============================================================
 // Detect if a response is a "refusal" (chatbot saying it can't help)
@@ -190,24 +138,78 @@ function isRefusalResponse(reply) {
 }
 
 // ============================================================
+// Detect if Gemini says facility/court is NOT FOUND in database
+// → Should retry with general knowledge
+// ============================================================
+function isNotFoundResponse(reply) {
+    const lowerReply = reply.toLowerCase();
+    const notFoundPatterns = [
+        'không có sân nào có tên',
+        'không có sân bóng đá nào có tên',
+        'không tìm thấy sân',
+        'không có cơ sở nào tên',
+        'không có cơ sở nào có tên',
+        'không có thông tin về sân',
+        'không có dữ liệu về',
+        'không tìm thấy cơ sở',
+        'không có trong hệ thống',
+        'không có trong dữ liệu',
+        'không nằm trong danh sách',
+        'chưa có sân nào tên',
+        'chưa có thông tin về',
+        'không được liệt kê',
+        'hiện chưa có sân',
+        'không có sân nào mang tên',
+        // NEW: catch "chưa có sân bóng đá nào ở khu vực", "chưa có sân nào ở", etc.
+        'chưa có sân bóng',
+        'chưa có sân nào ở',
+        'không có sân nào ở',
+        'chưa có sân nào tại',
+        'không có sân nào tại',
+        'chưa có cơ sở nào ở',
+        'không có cơ sở nào ở',
+        'chưa có cơ sở nào tại',
+        'không có cơ sở nào tại',
+        'trong hệ thống',
+        'trong danh sách các sân',
+        'chưa liên kết',
+        'chưa được liệt kê',
+        'hiện tại mình chưa có',
+        'hiện tại chưa có',
+        'chưa có sân nào trong',
+        'không có sân nào trong',
+        'mình chưa có sân',
+        'mình không có sân'
+    ];
+    return notFoundPatterns.some(p => lowerReply.includes(p));
+}
+
+// ============================================================
 // Pre-classify if question is clearly NOT about sports booking
+// Uses a 3-tier system:
+//   1. Product/gear/general knowledge keywords → OUT OF SCOPE (Gemini without DB)
+//   2. Booking-specific keywords → IN SCOPE (Gemini with DB)
+//   3. Default → IN SCOPE (let Gemini decide with DB)
 // ============================================================
 function isOutOfScopeQuestion(message) {
     const msgNorm = removeDiacritics(message.toLowerCase());
-
-    // Keywords that are clearly about sports booking → NOT out of scope
-    const sportKeywords = /san|co so|dat lich|booking|gia thue|lich trong|huy dat|doi lich|the thao|bong da|cau long|tennis|pickleball|bong ro|bong chuyen|t\&t|tntsport|lien he|gio mo cua|thanh toan|payment|coupon|ma giam|find mate|tim doi/;
-    if (sportKeywords.test(msgNorm)) return false;
 
     // Greetings, thanks → NOT out of scope (let local handle)
     const greetings = /^(xin chao|hello|hi|chao|hey|cam on|thank|ok|good|bye|tam biet|start|bat dau)$/;
     if (greetings.test(msgNorm.trim())) return false;
 
-    // Keywords indicating general questions → IS out of scope
-    const generalKeywords = /giai bai|bai tap|toan|ly|hoa|van|code|lap trinh|program|javascript|python|java|lịch sử|lich su|dia ly|khoa hoc|science|recipe|nau an|thoi tiet|weather|phim|movie|nhac|music|game|chinh tri|bau cu|tin tuc|news|ai la|wiki|so sanh|explain|giai thich/;
-    if (generalKeywords.test(msgNorm)) return true;
+    // === TIER 1: Product, gear, general knowledge → IS out of scope ===
+    // Check these FIRST because "giày bóng đá cho sân 5" contains both "giay" and "san"
+    // Use word boundaries (\b) for short words to avoid false positives (e.g. "sân nào" matching "ao")
+    const outOfScopeKeywords = /giay|giày|\bao\b|quan ao|trang phuc|phu kien|balo|\btui\b|\bvot\b|gay golf|bang bao ve|gang tay|\btat\b|dinh duong|\ban gi\b|\buong gi\b|tap luyen|bai tap|ky thuat|meo choi|\bluat\b|luat choi|luat thi dau|doi hinh|cau thu|huan luyen|giai dau|world cup|champions|premier league|la liga|v-league|sea games|olympic|giai bai|\btoan\b|\bhoa\b|\bvan\b|\bcode\b|lap trinh|program|javascript|python|java|lich su|dia ly|khoa hoc|science|recipe|nau an|thoi tiet|weather|\bphim\b|movie|\bnhac\b|music|\bgame\b|chinh tri|bau cu|tin tuc|news|ai la|wiki|giai thich|mua o dau|\bshop\b|cua hang|ban o dau|review san pham|unbox/;
+    if (outOfScopeKeywords.test(msgNorm)) return true;
 
-    return false; // Default: let Gemini decide
+    // === TIER 2: Booking-specific keywords → NOT out of scope ===
+    const bookingKeywords = /dat san|dat lich|booking|gia thue|lich trong|huy dat|doi lich|thanh toan|payment|coupon|ma giam|find mate|tim doi|co so|gio mo cua|lien he|timsan|tntsport|con trong|gio trong|san nao|o dau|khu vuc|quan \d/;
+    if (bookingKeywords.test(msgNorm)) return false;
+
+    // === Default: NOT out of scope (send with DB context) ===
+    return false;
 }
 
 // ============================================================
@@ -289,7 +291,7 @@ Hỗ trợ khách hàng trong phạm vi dịch vụ đặt sân thể thao của
 1. **Luôn trả lời bằng tiếng Việt** (trừ khi khách hỏi bằng tiếng Anh)
 2. **Ngắn gọn, rõ ràng**, sử dụng emoji để tạo sự thân thiện
 3. **Ưu tiên dữ liệu thực** từ hệ thống (danh sách sân, giá, tình trạng). KHÔNG bịa dữ liệu
-4. **Câu hỏi ngoài phạm vi:** Nếu khách hỏi những câu hỏi KHÔNG phải là tra cứu, đặt sân, hoặc thông tin cơ sở (ví dụ: mua đồ thể thao, mua giày, tin tức, kiến thức, lập trình, v.v.), hãy CHỈ trả lời bằng một từ duy nhất: \`[OUT_OF_SCOPE]\`. Tuyệt đối không giải thích thêm. Mọi câu trả lời xin lỗi dài dòng đều không được phép.
+4. **Câu hỏi ngoài phạm vi:** Nếu khách hỏi những câu hỏi KHÔNG trực tiếp liên quan đến đặt sân (ví dụ: mua giày thể thao, trang phục, dinh dưỡng, luật thi đấu, mẹo chơi, v.v.), hãy **sử dụng kiến thức của bạn để trả lời đầy đủ, hữu ích** cho khách hàng. Sau khi trả lời xong, khéo léo nhắc nhẹ về dịch vụ đặt sân của Timsan247. Ví dụ: nếu khách hỏi về giày bóng đá sân 5, hãy tư vấn các loại giày phù hợp (đế TF, IC...), rồi cuối cùng gợi ý "Nếu bạn cần tìm sân bóng đá 5 người để chơi thì mình có thể hỗ trợ đặt sân ngay nhé! ⚽"
 5. **Câu hỏi về thể thao nói chung** (luật chơi, mẹo tập luyện): có thể trả lời NGẮN GỌN (2-3 câu), sau đó dẫn về dịch vụ
 6. Khi khách hỏi "sân nào rẻ nhất", "sân nào gần nhất": so sánh và gợi ý dựa trên dữ liệu
 7. **Lọc theo khu vực**: Khi khách hỏi sân ở một quận/phường/khu vực cụ thể (VD: "sân ở quận 7", "tìm sân Thủ Đức"), bạn PHẢI CHỈ liệt kê các sân có địa chỉ thuộc khu vực đó. KHÔNG được liệt kê sân ở quận/khu vực khác. Nếu không có sân nào ở khu vực đó, trả lời "Hiện chưa có sân ở khu vực này" và gợi ý khu vực lân cận
@@ -409,6 +411,49 @@ function buildRuleBasedResponse(message, sports, facilities, todayBookings, rati
         return `🏆 **Timsan247** hiện có ${sports.length} môn thể thao:\n\n${sportList}\n\nBạn muốn tìm sân cho môn nào?`;
     }
 
+
+
+    // --- Tìm sân CỤ THỂ + tình trạng trống ---
+    // Phải đặt TRƯỚC rule tìm sân chung để ưu tiên match tên sân cụ thể
+    const askingAvailability = /con trong|con gio|gio trong|lich trong|available|slot|trong khong|co trong/.test(msgNorm);
+    if (askingAvailability || /san.*trong|trong.*san/.test(msgNorm)) {
+        // Thử tìm facility theo tên trong câu hỏi
+        const matchedFacility = facilities.find(f => {
+            const nameNorm = removeDiacritics(f.name.toLowerCase());
+            return msgNorm.includes(nameNorm) || msg.includes(f.name.toLowerCase());
+        });
+
+        if (matchedFacility) {
+            const facilityBookings = todayBookings.filter(b =>
+                b.facilityName && b.facilityName.toLowerCase().includes(matchedFacility.name.toLowerCase())
+            );
+            const rating = ratingMap[matchedFacility.id];
+            let reply = `🏟️ **${matchedFacility.name}**`;
+            if (matchedFacility.sport) reply += ` (${matchedFacility.sport.nameVi || matchedFacility.sport.name})`;
+            reply += '\n';
+            if (matchedFacility.address) reply += `📍 ${matchedFacility.address}\n`;
+            if (rating) reply += `⭐ Đánh giá: ${rating.avg}/5 (${rating.count} lượt)\n`;
+            reply += '\n';
+
+            if (facilityBookings.length > 0) {
+                const bookedTimes = facilityBookings.map(b => `${b.startTime.substring(0, 5)}-${b.endTime.substring(0, 5)}`).join(', ');
+                reply += `📅 **Hôm nay** đã có khách đặt: **${bookedTimes}**\n`;
+                reply += `✅ Các khung giờ khác vẫn **CÒN TRỐNG**!\n`;
+            } else {
+                reply += `📅 **Hôm nay: TRỐNG toàn bộ!** 🎉\n`;
+                reply += `Bạn có thể đặt bất cứ giờ nào từ 05:00 - 23:00.\n`;
+            }
+            reply += `\n👉 Vào trang **Chi tiết sân** để đặt ngay!`;
+            return reply;
+        }
+
+        // Không tìm thấy sân cụ thể → trả lời tình trạng chung
+        if (todayBookings && todayBookings.length === 0) {
+            return '⏰ **Tin vui!** Hôm nay toàn bộ các sân đều đang trống.\n\nBạn có thể đặt bất cứ giờ nào từ 05:00 - 23:00.\n\n👉 Vào trang **Đặt lịch** để chọn sân nhé!';
+        }
+        return `⏰ **Tình trạng hôm nay:**\n\nĐã có ${todayBookings.length} lượt đặt sân. Các giờ khác vẫn còn trống.\n\n**Cách kiểm tra chi tiết:**\n1. Vào trang **Đặt lịch**\n2. Chọn cơ sở và ngày\n3. Xem lưới giờ:\n   🟢 Xanh = còn trống\n   🔴 Đỏ = đã đặt\n\nBạn muốn tìm sân cho môn nào?`;
+    }
+
     // --- Tìm sân ---
     if (/san|co so|facility|tim san|danh sach san/.test(msgNorm)) {
         if (facilities.length === 0) return '🏟️ Hiện chưa có cơ sở nào. Vui lòng thử lại sau.';
@@ -432,7 +477,7 @@ function buildRuleBasedResponse(message, sports, facilities, todayBookings, rati
         }
 
         // Lọc theo khu vực (quận, phường, thành phố, tên đường) - hỗ trợ không dấu
-        const locationMatch = msgNorm.match(/(?:o|tai|gan|khu vuc|quan|phuong|duong|tp\.?|thanh pho)\s+([a-z0-9\s]+)/i);
+        const locationMatch = msgNorm.match(/(?:^|\s)(?:o|tai|gan|khu vuc|quan|phuong|duong|tp\.?|thanh pho)\s+([a-z0-9\s]+)/i);
         if (locationMatch) {
             let location = locationMatch[1].trim().toLowerCase();
             // Loại bỏ trailing noise
@@ -482,7 +527,6 @@ function buildRuleBasedResponse(message, sports, facilities, todayBookings, rati
         sports.forEach(s => { if (s.pricePerHour) info += `• ${s.nameVi || s.name}: **${Number(s.pricePerHour).toLocaleString('vi-VN')}đ/giờ**\n`; });
         if (facilities.length > 0) {
             info += '\n**Giá từng sân:**\n';
-            // Sắp xếp theo giá tăng dần
             const sorted = [...facilities].sort((a, b) => Number(a.pricePerHour) - Number(b.pricePerHour));
             sorted.slice(0, 6).forEach(f => {
                 if (f.pricePerHour) {
@@ -557,39 +601,48 @@ router.post('/message', async (req, res) => {
         // Fetch live DB data
         const { sports, facilities, todayBookings, currentDate, ratingMap } = await getDbData();
 
-        // Step 1: Pre-classify — if clearly out of scope, go straight to Grok
-        const clearlyOutOfScope = isOutOfScopeQuestion(message);
+        // Detect if question is outside booking scope
+        const outOfScope = isOutOfScopeQuestion(message);
 
-        if (clearlyOutOfScope && XAI_API_KEY) {
-            try {
-                console.log('🔀 Out-of-scope detected, routing to Grok...');
-                const grokReply = await callGrokAPI(message, history);
-                return res.json({ reply: grokReply, source: 'grok' });
-            } catch (grokError) {
-                console.warn('⚠️ Grok error:', grokError.message);
-                // Fall through to Gemini/rule-based
-            }
-        }
-
-        // Step 2: Try Gemini with DB context for sport-related questions
-        if (GEMINI_API_KEY) {
+        // Step 1: Try Vertex AI Gemini
+        {
             try {
                 const systemInstruction = buildSystemInstruction();
-                const dataContext = buildDataContext(sports, facilities, todayBookings, currentDate, ratingMap);
-                const userPrompt = `${dataContext}\n\n---\nKhách hàng hỏi: ${message.trim()}`;
 
-                const geminiReply = await callGeminiAPI(systemInstruction, userPrompt, history);
+                let userPrompt;
+                if (outOfScope) {
+                    // OUT OF SCOPE: Don't send DB context + enable Google Search
+                    // Let Gemini search the web for real-time info
+                    console.log('🔵 Out-of-scope question, calling Gemini with Google Search');
+                    userPrompt = `Khách hàng hỏi: ${message.trim()}`;
+                } else {
+                    // IN SCOPE: Send with full DB context
+                    const dataContext = buildDataContext(sports, facilities, todayBookings, currentDate, ratingMap);
+                    userPrompt = `${dataContext}\n\n---\nKhách hàng hỏi: ${message.trim()}`;
+                }
 
-                // Step 3: Check if Gemini refused (out-of-scope question)
-                if (isRefusalResponse(geminiReply) && XAI_API_KEY) {
+                let geminiReply = await callGeminiAPI(
+                    systemInstruction, userPrompt, history,
+                    { useSearch: outOfScope }
+                );
+
+                // If Gemini refused OR said "not found in DB", retry WITH Google Search
+                // This gives Gemini a second chance using web search
+                const shouldRetry = !outOfScope && (isRefusalResponse(geminiReply) || isNotFoundResponse(geminiReply));
+                if (shouldRetry) {
+                    const reason = isRefusalResponse(geminiReply) ? 'refused' : 'not-found';
+                    console.log(`🟡 Gemini ${reason} with DB context, retrying with Google Search...`);
                     try {
-                        console.log('🔀 Gemini refused, routing to Grok...');
-                        const grokReply = await callGrokAPI(message, history);
-                        return res.json({ reply: grokReply, source: 'grok' });
-                    } catch (grokError) {
-                        console.warn('⚠️ Grok fallback error:', grokError.message);
-                        // Return Gemini's refusal response
-                        return res.json({ reply: geminiReply, source: 'gemini' });
+                        const retryPrompt = reason === 'not-found'
+                            ? `Khách hàng hỏi về một sân/cơ sở thể thao KHÔNG CÓ trong hệ thống Timsan247. Hãy TÌM KIẾM trên internet và cung cấp thông tin thực tế (địa chỉ, giá, loại sân, đánh giá, số điện thoại...). Cuối câu trả lời, nhắc nhẹ rằng sân này chưa liên kết với Timsan247 nên chưa hỗ trợ đặt online.\n\nCâu hỏi: ${message.trim()}`
+                            : `Khách hàng hỏi: ${message.trim()}`;
+                        geminiReply = await callGeminiAPI(
+                            systemInstruction, retryPrompt, history,
+                            { useSearch: true }
+                        );
+                    } catch (retryErr) {
+                        console.warn('⚠️ Retry also failed:', retryErr.message);
+                        // Keep original reply
                     }
                 }
 
@@ -597,20 +650,10 @@ router.post('/message', async (req, res) => {
 
             } catch (geminiError) {
                 console.warn('⚠️ Gemini fallback:', geminiError.message);
-
-                // If Gemini failed and question is not about sports, try Grok
-                if (XAI_API_KEY) {
-                    try {
-                        const grokReply = await callGrokAPI(message, history);
-                        return res.json({ reply: grokReply, source: 'grok' });
-                    } catch (grokError) {
-                        console.warn('⚠️ Grok also failed:', grokError.message);
-                    }
-                }
             }
         }
 
-        // Step 4: Always fallback to rule-based
+        // Step 2: Always fallback to rule-based
         const fallbackReply = buildRuleBasedResponse(message, sports, facilities, todayBookings, ratingMap);
         return res.json({ reply: fallbackReply, source: 'fallback' });
 

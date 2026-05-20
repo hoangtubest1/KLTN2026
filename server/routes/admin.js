@@ -136,6 +136,42 @@ router.put('/bookings/:id/status', auth, admin, async (req, res) => {
     }
 
     res.json(updatedBooking);
+
+    // 🔔 Thông báo realtime cho user khi admin thay đổi trạng thái
+    try {
+      const { createNotification } = require('./notifications');
+      const owner = await User.findOne({ where: { email: booking.customerEmail } });
+      if (owner) {
+        const sportName = updatedBooking.sport?.nameVi || updatedBooking.sport?.name || '';
+        if (status === 'confirmed') {
+          await createNotification({
+            userId: owner.id,
+            type: 'booking_confirmed',
+            title: 'Đặt sân đã xác nhận',
+            message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã được xác nhận`,
+            link: '/bookings'
+          });
+        } else if (status === 'cancelled') {
+          await createNotification({
+            userId: owner.id,
+            type: 'booking_cancelled',
+            title: 'Đặt sân đã bị hủy',
+            message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã bị hủy bởi admin`,
+            link: '/bookings'
+          });
+        } else if (status === 'completed') {
+          await createNotification({
+            userId: owner.id,
+            type: 'booking_completed',
+            title: 'Đặt sân đã hoàn thành',
+            message: `Booking #${booking.id} (${sportName} - ${booking.facilityName}) đã hoàn thành. Cảm ơn bạn!`,
+            link: '/bookings'
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Notification error:', notifErr.message);
+    }
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -215,6 +251,96 @@ router.put('/findmates/:id/approve', auth, admin, async (req, res) => {
     res.json(updatedPost);
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+});
+
+// -- OWNER REQUEST MANAGEMENT --
+
+// Get all owner registration requests
+router.get('/owner-requests', auth, admin, async (req, res) => {
+  try {
+    const status = req.query.status || 'pending';
+    const where = { role: 'owner' };
+    if (status !== 'all') where.ownerStatus = status;
+
+    const owners = await User.findAll({
+      where,
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(owners);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Approve or reject owner request
+router.put('/owner-requests/:id', auth, admin, async (req, res) => {
+  try {
+    const { ownerStatus, ownerNote } = req.body;
+
+    if (!['approved', 'rejected'].includes(ownerStatus)) {
+      return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+    }
+
+    const user = await User.findByPk(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy user' });
+    if (user.role !== 'owner') return res.status(400).json({ message: 'User này không phải chủ sân' });
+
+    await user.update({
+      ownerStatus,
+      ownerNote: ownerNote || null
+    });
+
+    const updated = await User.findByPk(req.params.id, {
+      attributes: { exclude: ['password'] }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// -- FACILITY APPROVAL --
+
+// Get facilities pending approval
+router.get('/pending-facilities', auth, admin, async (req, res) => {
+  try {
+    const Facility = require('../models/Facility');
+    const Sport = require('../models/Sport');
+    const filter = req.query.filter || 'pending'; // pending | approved | all
+    const where = {};
+    if (filter === 'pending') where.isApproved = false;
+    else if (filter === 'approved') where.isApproved = true;
+
+    const facilities = await Facility.findAll({
+      where,
+      include: [
+        { model: Sport, as: 'sport', attributes: ['id', 'name', 'nameVi', 'emoji'] },
+        { model: User, as: 'owner', attributes: ['id', 'name', 'email', 'phone'] }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(facilities);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Approve or reject a facility
+router.put('/facilities/:id/approve', auth, admin, async (req, res) => {
+  try {
+    const Facility = require('../models/Facility');
+    const facility = await Facility.findByPk(req.params.id);
+    if (!facility) return res.status(404).json({ message: 'Không tìm thấy sân' });
+
+    const { isApproved } = req.body;
+    await facility.update({ isApproved: !!isApproved });
+
+    res.json({ message: isApproved ? 'Đã duyệt sân' : 'Đã từ chối sân', facility });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
